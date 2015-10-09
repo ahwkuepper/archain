@@ -55,6 +55,7 @@
         KSMX=1000! 000 ! only this many steps without RETURN
         NOUT = 0 !count outputs
 
+C       for tidal mass gain
         DO I=1,NMX
             PROB_TD(I) = 0.0d0
             PROB_TC(I) = 0.0d0
@@ -296,7 +297,7 @@ c       Orbital elements with respect to the central body.
         TIME2 = TIME
         DELT = TIME2-TIME1
 
-C       ENCOUNTER PROBABILITY COMPUTATION
+C       ENCOUNTER PROBABILITY COMPUTATION FOR TIDAL MASS GAIN
         DO I = 1,NN
             RGAL = SQRT((X(3*I-2)+CMX(1))**2+(X(3*I-1)+CMX(2))**2
      &                   +(X(3*I)+CMX(3))**2)
@@ -318,18 +319,6 @@ C           add contribution of SMBHs to mass(R) here?
             VCIRC = sqrt(GM/RGAL)
 
             VC2 = VCIRC*VCIRC
-
-
-C            VCIRC = sqrt(GMASS(RGAL)/RGAL)
-
-C           CHANGE FOR SMBH PROJECT!!
-C           add contribution of central SMBH to vcirc
-C            IF (i.NE.1) THEN
-C                VC2 = VCIRC*VCIRC + M(1)/SQRT((X(1)-X(3*I-2))**2
-C     &           +(X(2)-X(3*I-1))**2 + (X(3)-X(3*I))**2)
-C            ELSE
-C                VC2 = VCIRC*VCIRC
-C            END IF
 
 C           velocity dispersion at RGAL
             SIGMA = sqrt(VC2/2.0)
@@ -528,12 +517,10 @@ C---  init acc
         INCLUDE 'archain.h'
         REAL*8 df(*),Va(*),dcmv(3),dfGR(*),dfR(nmx3),acc(nmx3)
         REAL*8 dspin(3),spina(3)
-        REAL*8 RGAL, ACCEL, RS, VBH, VCIRC, VC2, RHO, GM, RJ, FGAL
-        REAL*8 CHI,SIGMA,GAMMAC,BRACKETP,LAMBDA
 
         SAVE
 
-
+C       Relativistic accelerations
         IF(Clight.ne.0.0)THEN ! INCLUDE only IF Clight set >0
             CALL Relativistic ACCELERATIONS(dfr,dfGR,Va,spina,dspin)
         ELSE
@@ -546,70 +533,11 @@ C---  init acc
             END DO
         END IF
 
-        DO i=1,N
-C           Get dynamical friction assuming velocity isotropy
-            RS=2.d0*(M(I))/Clight**2 !Softening of order 2xSchwarzschild radius
-            RGAL = SQRT((X(3*I-2)+CMX(1))**2+(X(3*I-1)+CMX(2))**2
-     &                   +(X(3*I)+CMX(3))**2+4.0*RS*RS)
-            VBH = SQRT((V(3*I-2)+CMV(1))**2+(V(3*I-1)+CMV(2))**2
-     &                   +(V(3*I)+CMV(3))**2)
 
-C           density at RGAL
-            RHO = RHOGAL(RGAL)
+        DF(3*I-2)=ACC(3*I-2) + DFR(3*I-2)
+        DF(3*I-1)=ACC(3*I-1) + DFR(3*I-1)
+        DF(3*I)=ACC(3*I) + DFR(3*I)
 
-            GM = GMASS(RGAL)
-
-C           add contribution of SMBHs to mass(R) here?
-            DO J=1,N
-                RJ = SQRT((X(3*J-2)+CMX(1))**2+(X(3*J-1)+CMX(2))**2
-     &                  +(X(3*J)+CMX(3))**2)
-                IF (RJ.LE.RGAL) THEN
-                    GM = GM + M(J)
-                END IF
-            END DO
-
-
-            VCIRC = sqrt(GM/RGAL)
-
-            VC2 = VCIRC*VCIRC
-
-C           or add contribution of SMBHs to vcirc here?
-C            DO J=1,N
-C                IF (J.NE.I) THEN
-C                  VC2 = VC2 + M(J)/SQRT((X(3*J-2)-X(3*I-2))**2
-C     &             +(X(3*J-1)-X(3*I-1))**2 + (X(3*J)-X(3*I))**2)
-C                END IF
-C            END DO
-
-C           velocity dispersion at RGAL
-            SIGMA = SIGMA_cor(RGAL) !sqrt(VC2/2.0)
-
-            CHI = VBH/(1.414213562*SIGMA)
-            LAMBDA = LOG(RGAL*SIGMA*SIGMA/(M(I)))
-
-            IF (LAMBDA.LT.0.0) LAMBDA = 0.0
-
-            IF (VBH.GT.1.) THEN
-                GAMMAC = 12.566370616*LAMBDA*M(I)*RHO/VBH**3
-            ELSE
-                GAMMAC = 12.566370616*LAMBDA*M(I)*RHO  !TINY SMOOTHING OF 0.06559 KM/S
-            ENDIF
-
-            BRACKETP = ERF(CHI) - 2.0*CHI/1.772453851*EXP(-CHI*CHI)
-
-C           dynamical friction force
-            FDF = GAMMAC*BRACKETP
-
-C           Safety measure
-            FGAL = SQRT(ACC(3*I-2)*ACC(3*I-2)+ACC(3*I-1)*ACC(3*I-2)
-     &              +ACC(3*I)*ACC(3*I))
-            IF (FDF.GT.FGAL) THEN FDF = FGAL
-
-            DF(3*I-2)=ACC(3*I-2)+DFR(3*I-2)-FDF*(V(3*I-2)+CMV(1))
-            DF(3*I-1)=ACC(3*I-1)+DFR(3*I-1)-FDF*(V(3*I-1)+CMV(2))
-            DF(3*I)=ACC(3*I)+DFR(3*I)-FDF*(V(3*I)+CMV(3))
-
-        END DO
         CALL reduce 2 cm(df,m,n,dcmv)
 
         RETURN
@@ -618,6 +546,154 @@ C           Safety measure
 
 
 
+
+************************************************************
+************************************************************
+
+
+
+        SUBROUTINE DIFFUSION(dT)
+*
+*
+*       Dynamical friction & phase-space diffusion.
+*       -------------------------------------------
+*
+C       Calculate diffusion coefficients assuming velocity isotropy
+
+        INCLUDE 'archain.h'
+        REAL*8 RGAL, ACCEL, RS, VBH, VCIRC, VC2, RHO, GM, RJ, FGAL
+        REAL*8 CHI,SIGMA,GAMMAC,BRACKETP,LAMBDA
+        REAL*8  ERF_NR, ERF_TEMP, FP, FBOT
+        REAL*8  DVP, DVP2, DVBOT2, GAUSS
+        REAL*8  DELTAW, DELTAE, M_STAR, DELTAV, VSMOOTH
+        REAL*8  vxp, vyp, vzp, vp, x1, y1, z1
+        REAL*8  vx, vy, vz, DV(3)
+
+        SAVE
+
+        DELTAW = 0.0
+        M_STAR = 0.45              !mean stellar mass in Msun -> Nbody units
+
+        DO i=1,N
+            RS=2.d0*(M(I))/Clight**2 !Softening of order 2xSchwarzschild radius
+            RGAL = SQRT((X(3*I-2)+CMX(1))**2+(X(3*I-1)+CMX(2))**2
+     &                   +(X(3*I)+CMX(3))**2+4.0*RS*RS)
+
+C           density at RGAL
+            RHO = RHOGAL(RGAL)
+
+C           mass enclosed by RGAL
+            GM = GMASS(RGAL)
+
+C           add contribution of SMBHs to mass(R) here
+            DO J=1,N
+                RJ = SQRT((X(3*J-2)+CMX(1))**2+(X(3*J-1)+CMX(2))**2
+     &                  +(X(3*J)+CMX(3))**2)
+                IF (RJ.LE.RGAL) THEN
+                    GM = GM + M(J)
+                END IF
+            END DO
+
+C           circular velocity from enclosed mass
+            VCIRC = sqrt(GM/RGAL)
+            VC2 = VCIRC*VCIRC
+
+C           velocity dispersion at RGAL
+            SIGMA = SIGMA_cor(RGAL)
+
+            vx = V(3*I-2)+CMV(1)
+            vy = V(3*I-1)+CMV(2)
+            vz = V(3*I)+CMV(3)
+
+C           velocity of black hole + velocity dispersion to get mean encounter velocity
+            VBH = SQRT(vx**2+vy**2+vz**2+SIGMA**2)
+
+            CHI = VBH/(1.414213562*SIGMA)
+
+C           Coulomb logarithm
+            LAMBDA = LOG(RGAL*SIGMA*SIGMA/(M(I)))
+C            LAMBDA = LOG(RGAL/RHNSC*MP/BODY(I)) !Mtot/MBH*RBH/Rh <--- use this one for potentials with scale params
+            IF (LAMBDA.LT.0.0) LAMBDA = 0.0
+
+            ERF_TEMP = ERF_NR(CHI)
+            FCHI = ERF_TEMP - 2.0*CHI/1.772453851*EXP(-CHI*CHI)
+            FCHI = 0.5*FCHI*CHI**(-2)
+
+C           Calculate diffusion coefficients, see e.g. Binney & Tremaine 2010
+            IF (SIGMA.GT.0.0) THEN
+                GAMMAC = 12.566370616*LAMBDA*RHO/SIGMA
+                DVP = -GAMMAC*FCHI/SIGMA*(M(I)+M_STAR)
+                DVP2 = SQRT(2.0)*GAMMAC*FCHI/CHI*M_STAR
+                DVBOT2 = SQRT(2.0)*GAMMAC*(ERF_TEMP-FCHI)/CHI*M_STAR
+                CALL GETGAUSS(GAUSS)
+                FP = DVP*DT+GAUSS*SQRT(DVP2*DT)
+                CALL GETGAUSS(GAUSS)
+                FBOT = 0.0 + GAUSS*SQRT(DVBOT2*DT)
+            ELSE
+                GAMMAC = 0.0
+                DVP = 0.0
+                DVP2 = 1.e-6
+                DVBOT2 = 1.e-6
+                FP = 0.0
+                FBOT = 0.0
+            ENDIF
+
+C           draw random vector
+            x1 = rand()-0.5
+            y1 = rand()-0.5
+            z1 = rand()-0.5
+
+            vxp = y1*vz-z1*vy
+            vyp = z1*vx-x1*vz
+            vzp = x1*vy-y1*vx
+
+            vp = SQRT(vxp*vxp+vyp*vyp+vzp*vzp)
+
+C           unit vector perpendicular to direction of motion
+            vxp = vxp/vp
+            vyp = vyp/vp
+            vzp = vzp/vp
+*
+            DELTAE = 0.5*M(I)*VBH*VBH
+*
+
+            VX = VX + FP*VX/VBH + FBOT*vxp
+            VY = VY + FP*VY/VBH + FBOT*vyp
+            VZ = VZ + FP*VZ/VBH + FBOT*vzp
+*
+C           Calculate energy change and test for too large kicks
+            DELTAV = VBH-
+     &        SQRT(VX**2+VY**2+VZ**2+SIGMA**2)
+            DELTAV = abs(DELTAV)/VBH
+*
+            if (DELTAV.le.1.0) then
+               VBH = SQRT(VX**2+VY**2+VZ**2+SIGMA**2)
+            else
+               WRITE(*,*) 'HUGE KICK'
+               CALL GETGAUSS(GAUSS)
+               VX = (VBH-VSMOOTH)/SQRT(3.0)*GAUSS
+               CALL GETGAUSS(GAUSS)
+               VY = (VBH-VSMOOTH)/SQRT(3.0)*GAUSS
+               CALL GETGAUSS(GAUSS)
+               VZ = (VBH-VSMOOTH)/SQRT(3.0)*GAUSS
+               VBH = SQRT(VX**2+VY**2+VZ**2+SIGMA**2)
+            endif
+
+            DELTAE = DELTAE-0.5*M(I)*VBH*VBH
+*
+            DELTAW = DELTAW + DELTAE !Sum up work done by diffusion
+*
+*
+C           Change scale radius of Plummer sphere based on energy change
+        END DO
+
+        DELTAW = -2.0*DELTAW
+C        AP2 = (1.0/SQRT(AP2)+3.3953054526*DELTAW/(MP*MP))**(-2)
+        DELTAW = 0.0
+
+        RETURN
+
+        END
 
 ************************************************************
 ************************************************************
@@ -756,14 +832,14 @@ C           Safety measure
 
 
 
-        FUNCTION ERF(X)
-        REAL*8 ERF, X
+        REAL*8 FUNCTION ERF_NR(X)
+        REAL*8 X
         REAL*8 GAMMP
 
         IF (X.LT.0) THEN
-            ERF = -GAMMP(0.5d0, X**2)
+            ERF_NR = -GAMMP(0.5d0, X**2)
         ELSE
-            ERF = GAMMP(0.5d0, X**2)
+            ERF_NR = GAMMP(0.5d0, X**2)
         ENDIF
 
         RETURN
@@ -777,9 +853,9 @@ C           Safety measure
 
 
 
-        FUNCTION GAMMP(A,X)
+        REAL*8 FUNCTION GAMMP(A,X)
 
-        REAL*8 A, GAMMP, X
+        REAL*8 A, X
 CU    USES gcf,gser
         REAL*8 gammcf,gamser,gln
 
@@ -841,9 +917,9 @@ CU    USES gammln
 
 
 
-        FUNCTION gammln(xx)
+        REAL*8 FUNCTION gammln(xx)
 
-        REAL*8 gammln,xx
+        REAL*8 xx
         INTEGER j
         DOUBLE PRECISION ser,stp,tmp,x,y,cof(6)
         SAVE cof,stp
@@ -907,6 +983,31 @@ CU    USES gammln
         END
 
 
+
+
+************************************************************
+************************************************************
+
+
+
+        SUBROUTINE GETGAUSS(GAUSS)
+
+        REAL*8 GAUSS
+        REAL*8 XX, YY, QQ
+
+        QQ = 2.0
+
+        DO WHILE (QQ.GT.1.0)
+            XX = 2.0*RAND()-1.0
+            YY = 2.0*RAND()-1.0
+            QQ = XX*XX + YY*YY
+        END DO
+
+        GAUSS = SQRT(-2.0*LOG(QQ)/QQ)*XX
+
+        RETURN
+
+        END
 
 
 
