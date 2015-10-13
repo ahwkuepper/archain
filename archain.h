@@ -1,7 +1,8 @@
       IMPLICIT REAL*8 (A-H,M,O-Z)                                            
       PARAMETER (NMX=200,NMX2=2*NMX,NMX3=3*NMX,NMX4=4*NMX,                    
      &NMX8=8*NMX,NMXm=NMX*(NMX-1)/2)                                         
-      COMMON/DataForRoutines1/X(NMX3),V(NMX3),WTTL,M(NMX),                  
+      PARAMETER (MSTAR=0.45, PI=3.141592653589793)
+      COMMON/DataForRoutines1/X(NMX3),V(NMX3),WTTL,M(NMX),
      &   XC(NMX3),WC(NMX3),MC(NMX),                                             
      &   XI(NMX3),VI(NMX3),MASS,RINV(NMXm),RSUM,INAME(NMX),N                   
       COMMON/DataForChainRoutinesTwo/MMIJ,CMX(3),CMV(3),

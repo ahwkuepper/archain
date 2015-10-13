@@ -19,7 +19,7 @@
         REAL*8 G0(3),G(3),cmet(3),xw(3),vw(3),xwr(NMX3)
      &   ,ai(NMX),ei(NMX),unci(NMX),Omi(NMX),ooi(NMX),cmxx(3),cmvx(3)
         REAL*8 PROB_TD(NMX),PROB_TC(NMX)
-        REAL*8 dPROB_TD(NMX),dPROB_TC(NMX), MSTAR
+        REAL*8 dPROB_TD(NMX),dPROB_TC(NMX)
         LOGICAL NEWREG
         CHARACTER*50 OUTFILE, OUTNAME
         CHARACTER*15 OUTTIME
@@ -39,7 +39,6 @@
         READ(5,*,err=999)OUTNAME,N,Nbh,DELTAT,TMAX, DTOUT
         READ(5,*,err=999)IWR,soft,cmet, Clight,Ixc ,spin,tolerance
         READ(5,*,err=999)rho0,eta1,eta2,eta3,re1,re2,re3
-
 
 *       Initialize variables
         TMAX = TMAX/14.90763847 ! Scaling from pc, Myr, Msun to Nbody units
@@ -85,7 +84,9 @@ C       for tidal mass gain
             V(L+3) = V(L+3)/0.06559
             index4output(I)=I  ! initialize output index (to be modified in case of merger)
         END DO
-
+        DO I=1,N
+            WRITE(*,*) M(I), X(3*I-2),X(3*I-1),X(3*I)
+        END DO
 c       Put into center-of-mass frame
         CALL Reduce2cm(x,m,N,cmxx)
         CALL Reduce2cm(v,m,N,cmvx)
@@ -100,21 +101,26 @@ c       Put into center-of-mass frame
 100     CONTINUE
 
 C       Include mass gain through tidal disruptions/captures
-        MSTAR = 1.0
+
+C!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+C       Also include diffusion here!
+C!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
         DO I=1,NMX
             J = index4output(I)
-            IF (dPROB_TD(J).GT.RAND(0)) THEN
-                M(J) = M(J) + 0.5*MSTAR
-                NEWREG = .true.
+C           CALL DIFFUSION(DELTAT)
+C            IF (dPROB_TD(J).GT.RAND(0)) THEN
+C                M(J) = M(J) + 0.5*MSTAR
+C                NEWREG = .true.
                 !CALL Reduce2cm(x,m,N,cmxx)
                 !CALL Reduce2cm(v,m,N,cmvx)
-            END IF
-            IF (dPROB_TC(J).GT.RAND(0)) THEN
-                M(J) = M(J) + MSTAR
-                NEWREG = .true.
+C            END IF
+C            IF (dPROB_TC(J).GT.RAND(0)) THEN
+C                M(J) = M(J) + MSTAR
+C                NEWREG = .true.
                 !CALL Reduce2cm(x,m,N,cmxx)
                 !CALL Reduce2cm(v,m,N,cmvx)
-            END IF
+C            END IF
             dPROB_TD(J) = 0.0
             dPROB_TC(J) = 0.0
         END DO
@@ -173,6 +179,8 @@ C       Include mass gain through tidal disruptions/captures
             END DO
            CALL FLUSH(66)
         END IF ! iwr.GT.-2
+
+
 c   IF YOU WANT ORBITAL ELEMENTS WITH RESPECT TO THE CENTRAL BH, activate the statements below
         IF(iwr.GT.-1)THEN
             DO j=2,N_ini
@@ -200,9 +208,9 @@ c       Orbital elements with respect to the central body.
 *           OUTPUT TO FILES
 **************************************
 
-            WRITE(66,234)time*14.90763847,
-     &      (xwr(k),xwr(k+1),xwr(k+2),k=1,3*n_ini,3),
-     &      (M(k), PROB_TD(k), PROB_TC(k),k=1,n_ini)
+            WRITE(66,234) time*14.90763847,
+     &      (M(k), xwr(3*k-2),xwr(3*k-1),xwr(3*k),
+     &      PROB_TD(k), PROB_TC(k), k=1,n_ini)
             WRITE(71,171)time,(ai(k),k=2,N_ini) ! a   WRITE orbital elements (with respect to M1)
             WRITE(72,171)time,(ei(k),k=2,N_ini) ! e
             WRITE(73,171)time,(unci(k),k=2,N_ini) ! i
@@ -221,7 +229,7 @@ c       Orbital elements with respect to the central body.
             OPEN(20, FILE=OUTNAME(1:LD)//'.'//OUTTIME, STATUS='REPLACE')
             DO I=1,N_ini
                 WRITE(20,*) time*14.90763847,
-     &                 xwr(I),xwr(I+1),xwr(I+2),PROB_TD(I),PROB_TC(I)
+     &            xwr(3*I-2),xwr(3*I-1),xwr(3*I),PROB_TD(I),PROB_TC(I)
             END DO
             NOUT = NOUT + 1
             CLOSE(20)
@@ -272,12 +280,10 @@ c       Orbital elements with respect to the central body.
         REAL*8 RGAL, VBH, VCIRC, VC2, SIGMA, VREL, GM, RJ
         REAL*8 PROB_TD(NMX),PROB_TC(NMX),SCAP,R_T,LBD
         LOGICAL newreg
-        REAL*8 PI, MSTAR, RSTAR, TIME1, TIME2, DELT
+        REAL*8 RSTAR, TIME1, TIME2, DELT
         REAL*8 dPROB_TD(NMX), dPROB_TC(NMX), dPROB
         SAVE
 
-        PI = 3.141592653589793
-        MSTAR = 1.0                 !mean stellar mass in Msun
         RSTAR = 1.0*2.25669073e-8   !stellar radius in pc
 
         tnext0=time+deltat
@@ -323,24 +329,24 @@ C           add contribution of SMBHs to mass(R) here?
 C           velocity dispersion at RGAL
             SIGMA = sqrt(VC2/2.0)
 
-            VREL = SIGMA_cor(RGAL) !SQRT((SQRT(8.0/PI)*SIGMA-VBH)**2)
+            VREL = SIGMA_cor(RGAL)
 
             J = index4output(I)
 
 C           Tidal disruption
             R_T = RSTAR*(M(I)/MSTAR)**0.3333333
             SCAP = 2.0*PI*R_T*M(I)/VREL**2
-            dPROB = RHOGAL(RGAL)*SCAP*VREL*DELT*14.90763847
-            PROB_TD(J) = PROB_TD(J) + dPROB
-            dPROB_TD(J) = dPROB_TD(J) + dPROB
+C            dPROB = RHOGAL(RGAL)*SCAP*VREL*DELT*14.90763847
+C            PROB_TD(J) = PROB_TD(J) + dPROB
+C            dPROB_TD(J) = dPROB_TD(J) + dPROB
 
 C           Tidal capture
             LBD = 2.0
             R_T = LBD*R_T !is this really LBD^2?
             SCAP = 2.0*PI*LBD*R_T*M(I)/VREL**2
-            dPROB = RHOGAL(RGAL)*SCAP*VREL*DELT*14.90763847
-            PROB_TC(J) = PROB_TC(J) + dPROB
-            dPROB_TC(J) = dPROB_TC(J) + dPROB
+C            dPROB = RHOGAL(RGAL)*SCAP*VREL*DELT*14.90763847
+C            PROB_TC(J) = PROB_TC(J) + dPROB
+C            dPROB_TC(J) = dPROB_TC(J) + dPROB
 
         END DO
 
@@ -533,11 +539,11 @@ C       Relativistic accelerations
             END DO
         END IF
 
-
-        DF(3*I-2)=ACC(3*I-2) + DFR(3*I-2)
-        DF(3*I-1)=ACC(3*I-1) + DFR(3*I-1)
-        DF(3*I)=ACC(3*I) + DFR(3*I)
-
+        DO i=1,3*n
+            DF(3*I-2)=ACC(3*I-2) + DFR(3*I-2)
+            DF(3*I-1)=ACC(3*I-1) + DFR(3*I-1)
+            DF(3*I)=ACC(3*I) + DFR(3*I)
+        END DO
         CALL reduce 2 cm(df,m,n,dcmv)
 
         RETURN
@@ -565,14 +571,13 @@ C       Calculate diffusion coefficients assuming velocity isotropy
         REAL*8 CHI,SIGMA,GAMMAC,BRACKETP,LAMBDA
         REAL*8  ERF_NR, ERF_TEMP, FP, FBOT
         REAL*8  DVP, DVP2, DVBOT2, GAUSS
-        REAL*8  DELTAW, DELTAE, M_STAR, DELTAV, VSMOOTH
+        REAL*8  DELTAW, DELTAE, DELTAV, VSMOOTH
         REAL*8  vxp, vyp, vzp, vp, x1, y1, z1
         REAL*8  vx, vy, vz, DV(3)
 
         SAVE
 
         DELTAW = 0.0
-        M_STAR = 0.45              !mean stellar mass in Msun -> Nbody units
 
         DO i=1,N
             RS=2.d0*(M(I))/Clight**2 !Softening of order 2xSchwarzschild radius
@@ -622,9 +627,9 @@ C            LAMBDA = LOG(RGAL/RHNSC*MP/BODY(I)) !Mtot/MBH*RBH/Rh <--- use this 
 C           Calculate diffusion coefficients, see e.g. Binney & Tremaine 2010
             IF (SIGMA.GT.0.0) THEN
                 GAMMAC = 12.566370616*LAMBDA*RHO/SIGMA
-                DVP = -GAMMAC*FCHI/SIGMA*(M(I)+M_STAR)
-                DVP2 = SQRT(2.0)*GAMMAC*FCHI/CHI*M_STAR
-                DVBOT2 = SQRT(2.0)*GAMMAC*(ERF_TEMP-FCHI)/CHI*M_STAR
+                DVP = -GAMMAC*FCHI/SIGMA*(M(I)+MSTAR)
+                DVP2 = SQRT(2.0)*GAMMAC*FCHI/CHI*MSTAR
+                DVBOT2 = SQRT(2.0)*GAMMAC*(ERF_TEMP-FCHI)/CHI*MSTAR
                 CALL GETGAUSS(GAUSS)
                 FP = DVP*DT+GAUSS*SQRT(DVP2*DT)
                 CALL GETGAUSS(GAUSS)
@@ -703,14 +708,13 @@ C        AP2 = (1.0/SQRT(AP2)+3.3953054526*DELTAW/(MP*MP))**(-2)
         FUNCTION GMASS(R)
 
         IMPLICIT REAL*8 (A-H,M,O-Z)
+        PARAMETER (MSTAR=0.45, PI=3.141592653589793)
         COMMON/galaxy/rho0,eta1,eta2,eta3,re1,re2,re3
         REAL*8 R, GMASS
         REAL*8 rho1, rho2, rho3, M_center, M_core, M_halo
-        REAL*8 PI
         REAL*8 MCL, RPL
-        MCL = 1.e6
-        RPL = 1.0
-        PI = 3.141592653589793
+        MCL = 1.e9
+        RPL = 10.0
 
         GMASS = MCL*((R/RPL)**3)*((1.0+(R/RPL)**2)**(-1.5))
 
@@ -766,14 +770,13 @@ C        AP2 = (1.0/SQRT(AP2)+3.3953054526*DELTAW/(MP*MP))**(-2)
         FUNCTION RHOGAL(R)
 
         IMPLICIT REAL*8 (A-H,M,O-Z)
+        PARAMETER (MSTAR=0.45, PI=3.141592653589793)
         COMMON/galaxy/rho0,eta1,eta2,eta3,re1,re2,re3
         REAL*8 R, RHOGAL
         REAL*8 rho1, rho2, rho3, M_center, M_core, M_halo
-        REAL*8 PI
         REAL*8 MCL, RPL
-        MCL = 1.e6
-        RPL = 1.0
-        PI = 3.141592653589793
+        MCL = 1.e9
+        RPL = 10.0
 
         RHOGAL = 3.0/(4.0*PI*RPL**3)*MCL*
      &      ((1.0+(R/RPL)**2)**(-2.5))
@@ -806,21 +809,18 @@ C        AP2 = (1.0/SQRT(AP2)+3.3953054526*DELTAW/(MP*MP))**(-2)
         FUNCTION SIGMA_cor(R)
 
         IMPLICIT REAL*8 (A-H,M,O-Z)
+        PARAMETER (MSTAR=0.45, PI=3.141592653589793)
         COMMON/galaxy/rho0,eta1,eta2,eta3,re1,re2,re3
         REAL*8 R, SIGMA_cor
         REAL*8 rho1, rho2, rho3, M_center, M_core, M_halo
-        REAL*8 PI
         REAL*8 MCL, RPL
-        MCL = 1.e6
-        RPL = 1.0
-        PI = 3.141592653589793
+        MCL = 1.e9
+        RPL = 10.0
 
         SIGMA_cor = MCL/(2.0*RPL)*
      &      ((1.0+(R/RPL)**2)**(-0.5))
 
         SIGMA_cor = sqrt(SIGMA_cor)
-
-        !CONTRIBUTION OF SMBH HAS TO BE ADDED HERE
 
         RETURN
 
