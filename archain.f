@@ -17,7 +17,7 @@
         COMMON/collision/icollision,ione,itwo,iwarning
         COMMON/galaxy/MCL,RPL
         REAL*8 G0(3),G(3),cmet(3),xw(3),vw(3),xwr(NMX3)
-     &   ,ai(NMX),ei(NMX),unci(NMX),Omi(NMX),ooi(NMX),cmxx(3),cmvx(3)
+     &   ,ai(NMX),ei(NMX),unci(NMX),Omi(NMX),ooi(NMX)
         REAL*8 PROB_TC(NMX), dPROB_TC(NMX), R_T, RSTAR
         LOGICAL NEWREG
         CHARACTER*50 OUTFILE, OUTNAME
@@ -79,15 +79,15 @@ C       for tidal mass gain
             L=3*(I-1)
             READ(5,*)M(I),(X(L+K),K=1,3),(V(L+K),K=1,3)
             MASS=MASS+M(I)
-            V(L+1) = V(L+1)/0.06559 !rescaling to internal units
-            V(L+2) = V(L+2)/0.06559
-            V(L+3) = V(L+3)/0.06559
+            V(L+1) = V(L+1)*14.90763847 !rescaling to internal units
+            V(L+2) = V(L+2)*14.90763847
+            V(L+3) = V(L+3)*14.90763847
             index4output(I)=I  ! initialize output index (to be modified in case of merger)
         END DO
 
 c       Put into center-of-mass frame
-C        CALL Reduce2cm(x,m,N,cmxx)
-C        CALL Reduce2cm(v,m,N,cmvx)
+        CALL Reduce2cm(x,m,N,cmxx)
+        CALL Reduce2cm(v,m,N,cmvx)
 
         GOTO 200
 
@@ -130,7 +130,7 @@ C       Include diffusion through encounters with stars
 
         CALL CHAINEVOLVE
      &   (N,X,V,M,TIME,DELTAT,EPS,NEWREG,KSMX,soft,cmet,clight,Ixc,NBH,
-     &    spin,CMXX,CMVX,PROB_TC,dPROB_TC)
+     &    spin,PROB_TC,dPROB_TC)
 
 
 
@@ -210,8 +210,8 @@ c       Orbital elements with respect to the central body.
 **************************************
 
             WRITE(66,234) time*14.90763847,
-     &      (M(k), xwr(3*k-2),xwr(3*k-1),xwr(3*k),
-     &      PROB_TC(k), k=1,n_ini)
+     &      (M(k), x(3*k-2)+cmxx(1),x(3*k-1)+cmxx(2),
+     &      x(3*k)+cmxx(3),PROB_TC(k), k=1,n_ini)
             WRITE(71,171)time,(ai(k),k=2,N_ini) ! a   WRITE orbital elements (with respect to M1)
             WRITE(72,171)time,(ei(k),k=2,N_ini) ! e
             WRITE(73,171)time,(unci(k),k=2,N_ini) ! i
@@ -230,7 +230,8 @@ c       Orbital elements with respect to the central body.
             OPEN(20, FILE=OUTNAME(1:LD)//'.'//OUTTIME, STATUS='REPLACE')
             DO I=1,N_ini
                 WRITE(20,*) time*14.90763847,
-     &            xwr(3*I-2),xwr(3*I-1),xwr(3*I),PROB_TC(I)
+     &            x(3*I-2)+cmxx(1),x(3*I-1)+cmxx(2),
+     &            x(3*I)+cmxx(3),PROB_TC(I)
             END DO
             NOUT = NOUT + 1
             CLOSE(20)
@@ -272,12 +273,12 @@ c       Orbital elements with respect to the central body.
 
         SUBROUTINE CHAINEVOLVE
      &  (NN,XX,VX,MX,TIME,DELTAT,TOL,NEWREG,KSMX,soft,cmet,cl,Ixc,NBH,
-     &   spini,CMXX,CMVX,PROB_TC,dPROB_TC)
+     &   spini,PROB_TC,dPROB_TC)
 
         INCLUDE 'archain.h'
         COMMON/collision/icollision,ione,itwo,iwarning
         COMMON/outputindex/index4output(200),N_ini
-        REAL*8 XX(*),VX(*),MX(*),cmet(3),spini(3),CMXX(3),CMVX(3)
+        REAL*8 XX(*),VX(*),MX(*),cmet(3),spini(3)
         REAL*8 RGAL, RHO, SIGMA
         REAL*8 PROB_TC(NMX),SCAP,R_T,LBD
         LOGICAL newreg
@@ -300,7 +301,7 @@ c       Orbital elements with respect to the central body.
         TIME1 = TIME
         CALL  ARC
      &  (NN,XX,VX,MX,TIME,tstep,TOL,NEWREG,KSMX,soft,cmet,cl,Ixc,NBH,
-     &   spini,CMXX,CMVX)
+     &   spini)
         TIME2 = TIME
         DELT = TIME2-TIME1
 
@@ -308,8 +309,8 @@ C       ENCOUNTER PROBABILITY COMPUTATION FOR TIDAL MASS GAIN
         DO J = 1,NN
             I = index4output(J)
             RS=2.d0*M(I)/Clight**2 !Softening of order 4xSchwarzschild radius
-            RGAL = SQRT((X(3*I-2)+CMX(1))**2+(X(3*I-1)+CMX(2))**2
-     &                   +(X(3*I)+CMX(3))**2+4.0*RS*RS)
+            RGAL = SQRT((X(3*I-2)+CMXX(1))**2+(X(3*I-1)+CMXX(2))**2
+     &                   +(X(3*I)+CMXX(3))**2+4.0*RS*RS)
 
             RHO = GALRHO(RGAL)
             SIGMA = GALSIG(RGAL)
@@ -471,14 +472,14 @@ C       are assumed to be in the vector ACC.
 C---  init acc
         DO  I=1,N
             RS=2.d0*(M(I))/Clight**2 !Softening of order 4xSchwarzschild radius
-            RGAL = SQRT((X(3*I-2)+CMX(1))**2+(X(3*I-1)+CMX(2))**2
-     &                   +(X(3*I)+CMX(3))**2+4.0*RS*RS)
+            RGAL = SQRT((X(3*I-2)+CMXX(1))**2+(X(3*I-1)
+     &            +CMXX(2))**2+(X(3*I)+CMXX(3))**2+4.0*RS*RS)
 
             ACCEL = GALMASS(RGAL)/RGAL**3
 
-            ACC(3*I-2) = -ACCEL*(X(3*I-2)+CMX(1))
-            ACC(3*I-1) = -ACCEL*(X(3*I-1)+CMX(2))
-            ACC(3*I)   = -ACCEL*(X(3*I)+CMX(3))
+            ACC(3*I-2) = -ACCEL*(X(3*I-2)+CMXX(1))
+            ACC(3*I-1) = -ACCEL*(X(3*I-1)+CMXX(2))
+            ACC(3*I)   = -ACCEL*(X(3*I)+CMXX(3))
         END DO
 
         RETURN
@@ -558,16 +559,19 @@ C       Calculate diffusion coefficients assuming velocity isotropy
 
         DO i=1,N
             RS=2.d0*(M(I))/Clight**2 !Softening of order 2xSchwarzschild radius
-            RGAL = SQRT((X(3*I-2)+CMX(1))**2+(X(3*I-1)+CMX(2))**2
-     &                   +(X(3*I)+CMX(3))**2+4.0*RS*RS)
+            RGAL = SQRT((X(3*I-2)+CMXX(1))**2+(X(3*I-1)
+     &             +CMXX(2))**2+(X(3*I)+CMXX(3))**2+4.0*RS*RS)
 
             GMASS = GALMASS(RGAL)
             RHO = GALRHO(RGAL)
             SIGMA = GALSIG(RGAL)
 
-            vx = V(3*I-2)+CMV(1)
-            vy = V(3*I-1)+CMV(2)
-            vz = V(3*I)+CMV(3)
+            vx = V(3*I-2)+CMVX(1)
+            vy = V(3*I-1)+CMVX(2)
+            vz = V(3*I)+CMVX(3)
+
+            WRITE(*,*) VX/14.90763847, V(3*I-2)/14.90763847,
+     &                 CMVX(1)/14.90763847
 
 C           velocity of black hole + velocity dispersion to get mean encounter velocity
             VBH = SQRT(vx**2+vy**2+vz**2+SIGMA**2)
@@ -620,9 +624,9 @@ C           unit vector perpendicular to direction of motion
             DELTAE = 0.5*M(I)*VBH2
 *
 
-            VX = VX + FP*VX/VBH + FBOT*vxp
-            VY = VY + FP*VY/VBH + FBOT*vyp
-            VZ = VZ + FP*VZ/VBH + FBOT*vzp
+            VX = VX ! + FP*VX/VBH + FBOT*vxp
+            VY = VY ! + FP*VY/VBH + FBOT*vyp
+            VZ = VZ ! + FP*VZ/VBH + FBOT*vzp
 *
 C           Calculate energy change and test for too large kicks
             DELTAV = VBH - SQRT(VX**2+VY**2+VZ**2)
@@ -632,7 +636,7 @@ C           Calculate energy change and test for too large kicks
                VBH = SQRT(VX**2+VY**2+VZ**2)
             else
                WRITE(*,*) 'HUGE KICK:',RGAL,GMASS,RHO,
-     &                  SIGMA,VBH
+     &               SIGMA/14.90763847,VBH/14.90763847
                CALL GETGAUSS(GAUSS)
                VX = VBH/SQRT(3.0)*GAUSS
                CALL GETGAUSS(GAUSS)
@@ -646,9 +650,9 @@ C           Calculate energy change and test for too large kicks
 *
             DELTAW = DELTAW + DELTAE !Sum up work done by diffusion
 *
-            V(3*I-2) = VX - CMV(1)
-            V(3*I-1) = VY - CMV(2)
-            V(3*I) = VZ - CMV(3)
+            V(3*I-2) = VX - CMVX(1)
+            V(3*I-1) = VY - CMVX(2)
+            V(3*I) = VZ - CMVX(3)
 *
         END DO
 
@@ -709,7 +713,6 @@ C        AP2 = (1.0/SQRT(AP2)+3.3953054526*DELTAW/(MP*MP))**(-2)
         REAL*8 FUNCTION GALSIG(R)
 
         IMPLICIT REAL*8 (A-H,M,O-Z)
-        PARAMETER (MSTAR=0.45, PI=3.141592653589793)
         COMMON/galaxy/MCL,RPL
         REAL*8 R
 
@@ -928,8 +931,7 @@ CU    USES gammln
 
         SUBROUTINE ARC
      &  (NN,XX,VX,MX,TIME,DELTAT,TOL,NEWREG,KSMX,soft,cmet,cl,Ixc,NBH,
-     &   spini,
-     &   CMXX,CMVX)
+     &   spini)
 c        BETTER TO USE CM-coords & vels for XX & VX and CMXX CMVX
 c        FOR CM-position (needed in the Perturbations routine).
 c-----------------------------------------------------------------
@@ -961,7 +963,7 @@ c        Ixc = 2 => exact time, =0 no exact time but RETURN after CHTIME>DELTAT 
         COMMON/collision/icollision,ione,itwo,iwarning
         COMMON/itemaxCOMMON/aitemax,itemax,itemax_used
         COMMON/turhia/rw,fr,frm,akiih(3)
-        REAL*8 G0(3),XX(*),VX(*),MX(*),cmet(3),spini(3),CMXX(3),CMVX(3)
+        REAL*8 G0(3),XX(*),VX(*),MX(*),cmet(3),spini(3)
         REAL*8 PROB_TC(NMX)
         REAL*8 Y(1500),SY(1500),Yold(1500)
         LOGICAL MUSTSWITCH,NEWREG
