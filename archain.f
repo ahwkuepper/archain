@@ -13,7 +13,7 @@
         INCLUDE 'archain.h'
         COMMON/DIAGNOSTICS/GAMMA,H,IWR
         COMMON/justforfun/Tkin,Upot,dSkin,dSpot
-        COMMON/outputindex/index4output(200),NA
+        COMMON/outputindex/index4output(200)
         COMMON/collision/icollision,ione,itwo,iwarning
         COMMON/galaxy/MCL,RPL
         REAL*8 G0(3),G(3),cmet(3),xw(3),vw(3),xwr(NMX3)
@@ -86,8 +86,10 @@ C       for tidal mass gain
         END DO
 
 c       Put into center-of-mass frame
-        CALL Reduce2cm(xa,ma,NA,cmxa)
-        CALL Reduce2cm(va,ma,NA,cmva)
+C        CALL Reduce2cm(xa,ma,NA,cmxa)
+C        CALL Reduce2cm(va,ma,NA,cmva)
+        CMXA = 0.0
+        CMVA = 0.0
 
         GOTO 200
 
@@ -99,10 +101,8 @@ c       Put into center-of-mass frame
 100     CONTINUE
 
 C       Include mass gain through tidal disruptions/captures
-
-        DO I=1,NA
-C            J = index4output(I)
-
+        DO J=1,N
+            I = index4output(J)
             R_T = RSTAR*(MA(I)/MSTAR)**0.3333333
             DO 1 WHILE (dPROB_TC(I).GT.0.0)
                 IF (dPROB_TC(I).GT.RAND()) THEN      !check for tidal capture, tidal disruption or physical collision
@@ -116,11 +116,11 @@ C            J = index4output(I)
                 END IF
                 dPROB_TC(I) = dPROB_TC(I)-1.0
  1           CONTINUE
-
              dPROB_TC(I) = 0.0
         END DO
         MASS=0.0
-        DO I=1,N
+        DO J=1,N
+            I = index4output(J)
             MASS=MASS+MA(I)
         END DO
 
@@ -221,7 +221,7 @@ C       Include diffusion through encounters with stars
 
         INCLUDE 'archain.h'
         COMMON/collision/icollision,ione,itwo,iwarning
-        COMMON/outputindex/index4output(200),NA
+        COMMON/outputindex/index4output(200)
         REAL*8 cmet(3),spini(3)
         REAL*8 RGAL, RHO, SIGMA
         REAL*8 PROB_TC(NMX),SCAP,R_T,LBD
@@ -242,20 +242,22 @@ C       Include diffusion through encounters with stars
 
  10     CONTINUE
 
-         DO I=1,N
-            L=3*(I-1)
-            M(I)=MA(I)
-            X(L+1) = XA(L+1)+CMXA(1)
-            X(L+2) = XA(L+2)+CMXA(2)
-            X(L+3) = XA(L+3)+CMXA(3)
-            V(L+1) = VA(L+1)+CMVA(1)
-            V(L+2) = VA(L+2)+CMVA(2)
-            V(L+3) = VA(L+3)+CMVA(3)
+         DO J=1,N
+            I = index4output(J)
+            L=3*(J-1)
+            K=3*(I-1)
+            M(J)=MA(I)
+            X(L+1) = XA(K+1)+CMXA(1)
+            X(L+2) = XA(K+2)+CMXA(2)
+            X(L+3) = XA(K+3)+CMXA(3)
+            V(L+1) = VA(K+1)+CMVA(1)
+            V(L+2) = VA(K+2)+CMVA(2)
+            V(L+3) = VA(K+3)+CMVA(3)
          END DO
 
 c       Put into center-of-mass frame
-        CALL Reduce2cm(x,m,N,cmxa)
-        CALL Reduce2cm(v,m,N,cmva)
+C        CALL Reduce2cm(x,m,N,cmxa)
+C        CALL Reduce2cm(v,m,N,cmva)
 
         TIME1 = TIME
         CALL  ARC
@@ -264,19 +266,10 @@ c       Put into center-of-mass frame
         TIME2 = TIME
         DELT = TIME2-TIME1
 
-         DO I=1,N
-            L=3*(I-1)
-            MA(I)=M(I)
-            XA(L+1) = X(L+1)
-            XA(L+2) = X(L+2)
-            XA(L+3) = X(L+3)
-            VA(L+1) = V(L+1)
-            VA(L+2) = V(L+2)
-            VA(L+3) = V(L+3)
-         END DO
 
 C       ENCOUNTER PROBABILITY COMPUTATION FOR TIDAL MASS GAIN
-        DO I = 1,NA
+        DO J = 1,N
+            I = index4output(J)
             RS=2.d0*MA(I)/Clight**2 !Softening of order 4xSchwarzschild radius
             RGAL = SQRT((XA(3*I-2)+CMXA(1))**2+(XA(3*I-1)+CMXA(2))**2
      &                   +(XA(3*I)+CMXA(3))**2+4.0*RS*RS)
@@ -293,32 +286,25 @@ C           Tidal disruption
             dPROB = RHO/MSTAR*SCAP*SIGMA*DELT
             PROB_TC(I) = PROB_TC(I) + dPROB
             dPROB_TC(I) = dPROB_TC(I) + dPROB
-        END DO
+         END DO
 
-        IF (step.GT.0.) step_now = step     ! SAVE step
+         IF (icollision.NE.0) THEN ! handle a collison
+            nmerger = nmerger + 1
+            CALL  Merge_i1_i2(time)   ! merge the two particles
+         ENDIF
 
-C       NO MERGERS FOR NOW
-        icollision = 0
-
-C        IF (icollision.NE.0) THEN ! handle a collison
-C            nmerger = nmerger + 1
-C            CALL  Merge_i1_i2(time)   ! merge the two particles
-C            newreg=.TRUE.       ! chain has changed
-C            NN=N                ! copy new chain
-C            DO i=1,NN
-C                MX(i)=M(i)
-C                DO k=1,3
-C                    xx(3*i-3+k)=x(3*i-3+k)
-C                    vx(3*i-3+k)=v(3*i-3+k)
-C                END DO
-C            END DO               ! DOne copying new chain
-
-C            tstep=tnext-time    ! set time step to CONTINUE
-C                                ! chain integration
-C            IF ((abs(tstep).GT.1.e-6*deltat).AND.(NN.GT.1)) GOTO 10
-C         ENDIF
-
-         step=step_now          ! restore the earlier step 
+         DO J=1,N
+            I = index4output(J)
+            L=3*(I-1)
+            K=3*(J-1)
+            MA(I)=M(J)
+            XA(L+1) = X(K+1)
+            XA(L+2) = X(K+2)
+            XA(L+3) = X(K+3)
+            VA(L+1) = V(K+1)
+            VA(L+2) = V(K+2)
+            VA(L+3) = V(K+3)
+         END DO
 
          RETURN
          END
@@ -335,7 +321,7 @@ C           Handle mergers of two particles - include kicks here!
             REAL*8 SM(NMX),XR(NMX3),XDR(NMX3),xwr(nmx3),ywr(nmx3)
             REAL*8 XKICK(3)
             COMMON/collision/icollision,Ione,Itwo,iwarning
-            COMMON/outputindex/index4output(200),NA
+            COMMON/outputindex/index4output(200)
             SAVE
 
             L=0
@@ -348,6 +334,11 @@ C           Handle mergers of two particles - include kicks here!
                 END DO
             END DO
 
+C           ADD KICK to Ione HERE
+            XKICK(1) = 50.0*rand()
+            XKICK(2) = 50.0*rand()
+            XKICK(3) = 50.0*rand()
+
             Myks=M(ione)
             Mkax=M(itwo)
             SM(Ione)=M(Ione)+M(Itwo)
@@ -356,14 +347,8 @@ C           Handle mergers of two particles - include kicks here!
      &          +M(Itwo)*X((Itwo-1)*3+K))/SM(Ione)
                 XDR(3*Ione-3+K)=(M(Ione)*V((Ione-1)*3+K)
      &          +M(Itwo)*V((Itwo-1)*3+K))/SM(Ione)
+     &          +XKICK(K)
 6           CONTINUE
-
-C           ADD KICK to Ione HERE
-            XKICK(1) = 50.0*rand()
-            XKICK(2) = 50.0*rand()
-            XKICK(3) = 50.0*rand()
-C           MISSING SUM HERE
-
 
             DO I=Ione+1,Itwo-1
                 sm(i)=m(i)
