@@ -19,6 +19,7 @@
         REAL*8 G0(3),G(3),cmet(3),xw(3),vw(3),xwr(NMX3)
      &   ,ai(NMX),ei(NMX),unci(NMX),Omi(NMX),ooi(NMX)
         REAL*8 PROB_TC(NMX), dPROB_TC(NMX), R_T, RSTAR
+        REAL*8 TIME1, TIME2, DELT
         LOGICAL NEWREG
         CHARACTER*50 OUTFILE, OUTNAME
         CHARACTER*15 OUTTIME
@@ -91,6 +92,8 @@ C        CALL Reduce2cm(va,ma,NA,cmva)
         CMXA = 0.0
         CMVA = 0.0
 
+        DELT = 0.0
+
         GOTO 200
 
 
@@ -105,10 +108,10 @@ C       Include mass gain through tidal disruptions/captures
             I = index4output(J)
             R_T = RSTAR*(MA(I)/MSTAR)**0.3333333
             DO 1 WHILE (dPROB_TC(I).GT.0.0)
-                IF (dPROB_TC(I).GT.RAND()) THEN      !check for tidal capture, tidal disruption or physical collision
+                IF (dPROB_TC(I).GT.RAND(0)) THEN      !check for tidal capture, tidal disruption or physical collision
                     MA(I) = MA(I) + 0.5*MSTAR
                     MCL = MCL - MSTAR
-                    B_IMPACT = RAND()*R_TC*R_TC
+                    B_IMPACT = RAND(0)*R_TC*R_TC
                     IF (B_IMPACT.GT.R_T*R_T
      &              .OR.B_IMPACT.LT.RSTAR*RSTAR) THEN    !test if it's a tidal capture or a collision
                         MA(I) = MA(I) + 0.5*MSTAR
@@ -125,13 +128,15 @@ C       Include mass gain through tidal disruptions/captures
         END DO
 
 C       Include diffusion through encounters with stars
-        CALL DIFFUSION(DELTAT)
+        CALL DIFFUSION(DELT)
         NEWREG = .true.
 
+        TIME1 = TIME
         CALL CHAINEVOLVE
      &   (TIME,DELTAT,EPS,NEWREG,KSMX,soft,cmet,clight,Ixc,NBH,
      &    spin,PROB_TC,dPROB_TC)
-
+        TIME2 = TIME
+        DELT = TIME2-TIME1
 
 
 
@@ -335,9 +340,9 @@ C           Handle mergers of two particles - include kicks here!
             END DO
 
 C           ADD KICK to Ione HERE
-            XKICK(1) = 50.0*rand()
-            XKICK(2) = 50.0*rand()
-            XKICK(3) = 50.0*rand()
+            XKICK(1) = 50.0*rand(0)
+            XKICK(2) = 50.0*rand(0)
+            XKICK(3) = 50.0*rand(0)
 
             Myks=M(ione)
             Mkax=M(itwo)
@@ -417,8 +422,9 @@ c         New value of the number of bodies.
         SUBROUTINE COORDINATE DEPENDENT PERTURBATIONS(ACC) ! USER DEFINED
 
         INCLUDE 'archain.h'
+        COMMON/galaxy/MCL,RPL
         REAL*8 ACC(NMX3)
-        REAL*8 RGAL, ACCEL, RS
+        REAL*8 RGAL2, ACCEL
         SAVE
 
 C       Physical positions and velocities (in the inertial coordinate)
@@ -430,11 +436,10 @@ C       are assumed to be in the vector ACC.
 
 C---  init acc
         DO  I=1,N
-            RS=2.d0*(M(I))/Clight**2 !Softening of order 4xSchwarzschild radius
-            RGAL = SQRT((X(3*I-2)+CMXA(1))**2+(XA(3*I-1)
-     &            +CMXA(2))**2+(XA(3*I)+CMXA(3))**2+4.0*RS*RS)
+            RGAL2 = (X(3*I-2)+CMXA(1))**2+(XA(3*I-1)
+     &           +CMXA(2))**2+(XA(3*I)+CMXA(3))**2+RPL*RPL
 
-            ACCEL = GALMASS(RGAL)/RGAL**3
+            ACCEL = MCL/RGAL2**1.5
 
             ACC(3*I-2) = -ACCEL*(X(3*I-2)+CMXA(1))
             ACC(3*I-1) = -ACCEL*(X(3*I-1)+CMXA(2))
@@ -502,6 +507,8 @@ C       Relativistic accelerations
 C       Calculate diffusion coefficients assuming velocity isotropy
 
         INCLUDE 'archain.h'
+        COMMON/galaxy/MCL,RPL
+        COMMON/outputindex/index4output(200)
         REAL*8 ERF_NR, ERF_TEMP, FP, FBOT
         REAL*8 DVP, DVP2, DVBOT2, GAUSS
         REAL*8 DELTAW, DELTAE, DELTAV, DT
@@ -567,9 +574,9 @@ C     &      /14.90763847, VBH/14.90763847
             ENDIF
 
 C           draw random vector
-            x1 = rand()-0.5
-            y1 = rand()-0.5
-            z1 = rand()-0.5
+            x1 = rand(0)-0.5
+            y1 = rand(0)-0.5
+            z1 = rand(0)-0.5
 
             vxp = y1*vz-z1*vy
             vyp = z1*vx-x1*vz
@@ -600,6 +607,7 @@ C           Calculate energy change and test for too large kicks
             else
                WRITE(*,*) 'HUGE KICK:',RGAL,GMASS,RHO,
      &               SIGMA/14.90763847,VBH/14.90763847
+     &              ,RGAL, GALRH, MCL, MA(I)
                CALL GETGAUSS(GAUSS)
                VX = VBH/SQRT(3.0)*GAUSS
                CALL GETGAUSS(GAUSS)
@@ -858,8 +866,8 @@ CU    USES gammln
         QQ = 2.0
 
         DO WHILE (QQ.GT.1.0)
-            XX = 2.0*RAND()-1.0
-            YY = 2.0*RAND()-1.0
+            XX = 2.0*RAND(0)-1.0
+            YY = 2.0*RAND(0)-1.0
             QQ = XX*XX + YY*YY
         END DO
 
