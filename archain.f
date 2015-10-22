@@ -516,7 +516,8 @@ C       Calculate diffusion coefficients assuming velocity isotropy
         DELTAW = 0.0
         GALRH = 1.305*RPL
 
-        DO i=1,NA
+        DO J=1,N
+            I = index4output(J)
             RS=2.d0*(MA(I))/Clight**2 !Softening of order 2xSchwarzschild radius
             RGAL = SQRT((XA(3*I-2)+CMXA(1))**2+(XA(3*I-1)
      &             +CMXA(2))**2+(XA(3*I)+CMXA(3))**2+4.0*RS*RS)
@@ -621,7 +622,6 @@ C           Calculate energy change and test for too large kicks
 C       Change scale radius of Plummer sphere based on energy change
         DELTAW = -2.0*DELTAW
         RPL = 1.0/(1.0/RPL+3.3953054526*DELTAW/(MCL*MCL))
-        DELTAW = 0.0
 
         RETURN
 
