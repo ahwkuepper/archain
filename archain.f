@@ -25,7 +25,7 @@
         CHARACTER*15 OUTTIME
         INTEGER NOUT, DTOUT, LD
 
-        call srand(1)
+        call srand(2)
 
         RSTAR = 1.0*2.25669073e-8   !stellar radius in pc
         RSTAR = RSTAR*(MSTAR)**0.8  !scale according to R/Rsun = (M/Msun)^0.8
@@ -54,7 +54,7 @@
         EPS=tolerance
         ENER0=0
         NEWREG=.TRUE.
-        KSMX=1000! 000 ! only this many steps without RETURN
+        KSMX=100000 ! only this many steps without RETURN
         NOUT = 0 !count outputs
 
 C       for tidal mass gain
@@ -91,6 +91,8 @@ C        CALL Reduce2cm(xa,ma,NA,cmxa)
 C        CALL Reduce2cm(va,ma,NA,cmva)
         CMXA = 0.0
         CMVA = 0.0
+        CMX = 0.0
+        CMV = 0.0
 
         DELT = 0.0
 
@@ -436,8 +438,8 @@ C       are assumed to be in the vector ACC.
 
 C---  init acc
         DO  I=1,N
-            RGAL2 = (X(3*I-2)+CMXA(1))**2+(XA(3*I-1)
-     &           +CMXA(2))**2+(XA(3*I)+CMXA(3))**2+RPL*RPL
+            RGAL2 = (X(3*I-2)+CMXA(1))**2+(X(3*I-1)
+     &           +CMXA(2))**2+(X(3*I)+CMXA(3))**2+RPL*RPL
 
             ACCEL = MCL/RGAL2**1.5
 
@@ -484,7 +486,7 @@ C       Relativistic accelerations
             DF(3*I-1)=ACC(3*I-1) + DFR(3*I-1)
             DF(3*I)=ACC(3*I) + DFR(3*I)
         END DO
-        CALL reduce 2 cm(df,m,n,dcmv)
+C        CALL reduce 2 cm(df,m,n,dcmv)
 
         RETURN
 
@@ -1557,10 +1559,10 @@ C        Center of mass
         L=3*(I-1)
         MC(I)=M(INAME(I)) ! masses along the chain
         MASS=MASS+MC(I)
-         DO K=1,3
-         CMX(K)=CMX(K)+M(I)*X(L+K)
-         CMV(K)=CMV(K)+M(I)*V(L+K)
-         END DO
+C         DO K=1,3
+C         CMX(K)=CMX(K)+M(I)*X(L+K)
+C         CMV(K)=CMV(K)+M(I)*V(L+K)
+C         END DO
         END DO
         DO K=1,3
         CMX(K)=CMX(K)/MASS
@@ -3069,7 +3071,7 @@ c adding V-dependent perts.
         END DO
         END DO
         CALL EVALUATE V(V,WCi) 
-        CALL reduce 2 cm(acc,m,n,dcmv) 
+!        CALL reduce 2 cm(acc,m,n,dcmv)
         DO I=1,3*N
         V(I)=V(I)+acc(I)*dT/2 ! average Velocity
         END DO
