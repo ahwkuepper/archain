@@ -23,9 +23,14 @@
         LOGICAL NEWREG
         CHARACTER*50 OUTFILE, OUTNAME
         CHARACTER*15 OUTTIME
-        INTEGER NOUT, DTOUT, LD
+        INTEGER NOUT, DTOUT, LD, seed(12)
+        REAL*8  RNR, RNR2
 
-        call srand(2)
+        call srand(1)    !initialize RAND()
+        DO I=1,12        !initialize RANDOM_NUMBER()
+            seed(i) = i
+        END DO
+        CALL RANDOM_SEED(put=seed)
 
         RSTAR = 1.0*2.25669073e-8   !stellar radius in pc
         RSTAR = RSTAR*(MSTAR)**0.8  !scale according to R/Rsun = (M/Msun)^0.8
@@ -112,10 +117,12 @@ C       Include mass gain through tidal disruptions/captures
             I = index4output(J)
             R_T = RSTAR*(MA(I)/MSTAR)**0.3333333
             DO 1 WHILE (dPROB_TC(I).GT.0.0)
-                IF (dPROB_TC(I).GT.RAND(0)) THEN      !check for tidal capture, tidal disruption or physical collision
+                CALL RANDOM_NUMBER(RNR)
+                IF (dPROB_TC(I).GT.RNR) THEN      !check for tidal capture, tidal disruption or physical collision
                     MA(I) = MA(I) + 0.5*MSTAR
                     MCL = MCL - MSTAR
-                    B_IMPACT = RAND(0)*R_TC*R_TC
+                    CALL RANDOM_NUMBER(RNR2)
+                    B_IMPACT = RNR2*R_TC*R_TC
                     IF (B_IMPACT.GT.R_T*R_T
      &              .OR.B_IMPACT.LT.RSTAR*RSTAR) THEN    !test if it's a tidal capture or a collision
                         MA(I) = MA(I) + 0.5*MSTAR
