@@ -3,12 +3,12 @@
      &NMX8=8*NMX,NMXm=NMX*(NMX-1)/2)                                         
       PARAMETER (MSTAR=0.45, PI=3.141592653589793)
       COMMON/DataForRoutines1/X(NMX3),V(NMX3),WTTL,M(NMX),
-     &   XC(NMX3),WC(NMX3),MC(NMX),CMXX(3),CMVX(3),
+     &   XC(NMX3),WC(NMX3),MC(NMX),CMXX(3),CMVX(3),EA(NMX),
      &   XI(NMX3),VI(NMX3),MASS,RINV(NMXm),RSUM,INAME(NMX),
      &   VA(NMX3),XA(NMX3),MA(NMX),CMXA(3),CMVA(3),N
       COMMON/DataForChainRoutinesTwo/MMIJ,CMX(3),CMV(3),
      &   ENERGY,Energr,CHTIME          
-      common/softening/ee,cmethod(3),Clight,NofBH                              
+      common/softening/ee,cmethod(3),Clight,Clightpn,NofBH
       common/TIMECOMMON/Taika,timecomparison              
       common/spincommon/spin(3)! the relative spin of M(1) !Spin=spin*G*M^2/c
       common/tolerancecommon/EPS

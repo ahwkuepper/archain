@@ -19,7 +19,7 @@
         REAL*8 G0(3),G(3),cmet(3),xw(3),vw(3),xwr(NMX3)
      &   ,ai(NMX),ei(NMX),unci(NMX),Omi(NMX),ooi(NMX)
         REAL*8 PROB_TC(NMX), dPROB_TC(NMX), R_T, RSTAR
-        REAL*8 TIME1, TIME2, DELT
+        REAL*8 TIME1, TIME2, DELT, RGAL, VBH, EPOT
         LOGICAL NEWREG
         CHARACTER*50 OUTFILE, OUTNAME
         CHARACTER*15 OUTTIME
@@ -59,13 +59,14 @@
         EPS=tolerance
         ENER0=0
         NEWREG=.TRUE.
-        KSMX=100000 ! only this many steps without RETURN
+        KSMX=1000000 ! only this many steps without RETURN
         NOUT = 0 !count outputs
 
 C       for tidal mass gain
         DO I=1,NMX
             PROB_TC(I) = 0.0d0
             dPROB_TC(I) = 0.0d0
+            EA(I) = 0.0d0
         END DO
 
 
@@ -186,9 +187,20 @@ C       Include diffusion through encounters with stars
 *           OUTPUT TO FILES
 **************************************
 
-        WRITE(66,234) time*14.90763847,
+C        DO I=1,NA
+C            VBH = SQRT(VA(3*I-2)**2+XA(3*I-1)**2
+C     &                   +XA(3*I)**2+4.0*RS*RS)
+C            RGAL = SQRT(XA(3*I-2)**2+XA(3*I-1)**2
+C     &                   +XA(3*I)**2+4.0*RS*RS)
+C            EPOT = ...
+C            EA(I) = 0.5*MA(I)*VBH**2+EPOT
+C        END DO
+C HAS TO BE WRITTEN!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+        WRITE(66,234) time*14.90763847,MCL,RPL,
      &    (Ma(k), xa(3*k-2),xa(3*k-1),
-     &     xa(3*k),PROB_TC(k), k=1,na)
+     &     xa(3*k), va(3*k-2),va(3*k-1),
+     &     va(3*k), PROB_TC(k), k=1,na)
 
         NTIME = time/DTOUT*14.90763847+0.99999 !round up
         NTIME = NTIME*DTOUT
@@ -197,8 +209,9 @@ C       Include diffusion through encounters with stars
         OPEN(20, FILE=OUTNAME(1:LD)//'.'//OUTTIME, STATUS='REPLACE')
         DO I=1,NA
             WRITE(20,*) time*14.90763847,
-     &           xa(3*I-2),xa(3*I-1),
-     &           xa(3*I),PROB_TC(I)
+     &           xa(3*I-2), xa(3*I-1),
+     &           xa(3*I), va(3*I-2), va(3*I-1),
+     &           va(3*I), PROB_TC(I)
         END DO
         NOUT = NOUT + 1
         CLOSE(20)
@@ -477,7 +490,7 @@ C---  init acc
         SAVE
 
 C       Relativistic accelerations
-        IF(Clight.ne.0.0)THEN ! INCLUDE only IF Clight set >0
+        IF(clightpn.ne.0.0)THEN ! INCLUDE only IF Clightpn set >0 in find chain indices
             CALL Relativistic ACCELERATIONS(dfr,dfGR,Vap,spina,dspin)
         ELSE
             DO i=1,3*n
@@ -486,6 +499,9 @@ C       Relativistic accelerations
             END DO
             DO k=1,3
                 dspin(k)=0
+            END DO
+            DO k=1,3
+                spina(k)=0
             END DO
         END IF
 
@@ -552,7 +568,7 @@ C       Calculate diffusion coefficients assuming velocity isotropy
 
 
 C           velocity of black hole + velocity dispersion to get mean encounter velocity
-            VBH = SQRT(vx**2+vy**2+vz**2+SIGMA**2)
+            VBH = SQRT(vx**2+vy**2+vz**2) !+SIGMA**2)
 
 C            WRITE(*,*) sqrt(VX*VX+VY*VY+VZ*VZ)/14.90763847,
 C     &      sqrt(V(3*I-2)*V(3*I-2)+V(3*I-1)*V(3*I-1)+V(3*I)*V(3*I))
@@ -1001,7 +1017,7 @@ c           END IF
         NofBH=NBH  ! - " -
            
         IF(NEWREG)THEN
-c           step=0
+C           step=0
             iwarning=0
             itemax=12
             itemax_used=0
@@ -1416,16 +1432,25 @@ C        Is this a triangle with smallest size not regularised?
 
 
         SUBROUTINE FIND CHAIN INDICES
-         INCLUDE 'archain.h'
+        INCLUDE 'archain.h'
         REAL*8 RIJ2(NMXM)
         INTEGER IC(NMX2),IJ(NMXM,2),IND(NMXM)
+        REAL*8 TINSPIRAL, THUBBLE
         LOGICAL USED(NMXM),SUC,LOOP
         SAVE
+        THUBBLE = 1.0e4  !set Hubble time to 10 Gyr
+        Clightpn = 0.0 ! SET SPEED OF LIGHT FOR PN TERM IMPLEMENTATION TO ZERO AND ONLY INCREASE IF T_INSPIRAL IS SMALLER THAN HUBBLE TIME
         L=0
         DO I=1,N-1
         DO J=I+1,N
         L=L+1
         RIJ2(L)=SQUARE(X(3*I-2),X(3*J-2))
+        TINSPIRAL = 5.0/256.0*clight**5*RIJ2(L)**2
+     &              /((M(I)*M(J))*(M(I)+M(J)))
+        IF (TINSPIRAL.le.THUBBLE) THEN
+            clightpn = 1.0
+            write(*,*) TINSPIRAL, I, J
+        ENDIF
         IJ(L,1)=I
         IJ(L,2)=J
         USED(L)=.FALSE.
@@ -1880,7 +1905,7 @@ c       END of I-loop
         SUBROUTINE SubSteps(Y0,Y,H,Leaps)
         IMPLICIT REAL*8 (a-h,m,o-z)
         REAL*8 Y(*),Y0(*)!,ytest(1000)
-        COMMON/softening/ee,cmethod(3),Clight,NofBh
+        COMMON/softening/ee,cmethod(3),Clight,Clightpn,NofBh
         COMMON/collision/icollision,Ione,Itwo,iwarning
         SAVE
         icollision=0
@@ -2307,7 +2332,7 @@ c-----------------------------------------------------
          CALL Relativistic
      &  Terms(Ii,dX,dW,rij,rDOtv,vij2,m(Ii),m(Jx),cl,DF,dfGR,spina,dsp)
             RS=2.d0*(m(i)+m(j))/CL**2
-          test= 4.0*RS!4*RS !Collision Criterium
+          test= 10000.0*RS!4*RS !Collision Criterium
 c          WRITE(6,*)rij/RS,sqrt(vij2)/cl,' R  V '
 c                         test=.99*Rs
         IF(rij.LT.test.AND.iwarning.LT.2)
@@ -2348,79 +2373,13 @@ c        Grav.Rad.-terms
 
 
 
-************************************************************
-************************************************************
-
-
-
-         SUBROUTINE Relativistic terms_not in use
-     &   (I1,X,V,r,rDOtv,v2,m1,m2,c,DV,DVgr,spina,dspin)
-         IMPLICIT REAL*8 (a-h,m,n,o-z)
-         REAL*8 X(3),V(3),DV(3),n(3),ny,nv,m1,m2,m
-         REAL*8 dv2(3),dv3(3),dv4(3),dv5(3),dvgr(3),spina(3),dspin(3)
-         DATA beta,gamma/1.d0,1.d0/
-         SAVE
-          m=m1+m2
-
-          my=m1*m2/m
-
-          ny=my/m
-          n(1)=x(1)/r
-          n(2)=x(2)/r
-          n(3)=x(3)/r
- 
-          nv=rDOtv/r
-          v4=v2*v2
-           r2=r*r
-           
-                         IF(1.EQ.1)THEN
-           DO i=1,3
-          dv2(i)=m/c**2*n(i)/r2*(m/r*(2*(beta+gamma)+2*ny) ! 1/c**2 terms
-     &    -v2*(gamma+3*ny)+3*ny/2*nv**2)
-     &    +m*v(i)*nv/c**2/r**2*(2*gamma+2-2*ny)
-           END DO
-         
-          
-          DO i=1,3
-          dv4(i)=1/c**4*(                               ! 1/c**4 terms
-     & +ny*m*n(i)/r2*(-2*v4+1.5d0*v2*nv**2*(3-4*ny)-15*nv**4/8*(1-3*ny))
-     &  +m**2*n(i)/r**3*(v2/2*ny*(11+4*ny)+2*nv**2*(1+ny*(12+3*ny)))
-     &  +ny*m*v(i)/r**2*(8*v2*nv-3*nv**3/2*(3+2*ny))
-     &  -m**2/2/r**3*v(i)*nv*(4+43*ny)-m**3*n(i)/r**4*(9+87*ny/4))
-           END DO
-                  ELSE
-                  DO k=1,3
-                  dv2(k)=0
-                  dv4(k)=0
-                  END DO
-                  END IF
-           DO i=1,3                         
-           dv5(i)=ny/c**5*(   ! gravitational radiation terms
-     &    -8*m**2/r**3/5*(v(i)*(v2+3*m/r)-n(i)*nv*(3*v2+17*m/3/r)))
-           END DO
-         IF(I1.EQ.1)THEN
-         CALL gopu_SpinTerms(X,V,r,M1,m2,c,spina,dv3,dspin) ! spinterms ->dv3
-         ELSE
-         DO k=1,3
-         dv3(k)=0
-         dspin(k)=0
-         END DO
-         END IF
-           DO i=1,3
-           dv(i)=-1/m*(dv2(i)+dv3(i)+dv4(i)+dv5(i))
-           dvgr(i)=-1/m*dv5(i)
-           END DO
-          RETURN
-          END
-
-
 
 ************************************************************
 ************************************************************
 
 
 
-         SUBROUTINE Relativistic terms!_not in use
+         SUBROUTINE Relativistic terms
      &   (I1,X,V,r,rDOtv,vv,m1,m2,c,DV,DVgr,spina,dspin)
          IMPLICIT REAL*8 (a-h,m,n,o-z)
          REAL*8 n(3),x(3),v(3),dV(3),dVgr(3),spina(3),dspin(3)
@@ -2436,76 +2395,78 @@ c           pi= 3.14159265358979324d0
          END DO
          m=m1+m2
          eta=m1*m2/m**2
-        A1=2*(2+eta)*(m/r)-(1+3*eta)*vv +1.5d0*eta*vr**2
+C        A1=2*(2+eta)*(m/r)-(1+3*eta)*vv +1.5d0*eta*vr**2
         
-        A2=-.75d0*(12+29*eta)*(m/r)**2-eta*(3-4*eta)*vv**2
-     &     -15.d0/8*eta*(1-3*eta)*vr**4+.5d0*eta*(13-4*eta)*(m/r)*vv
-     &     +(2+25*eta+2*eta**2)*(m/r)*vr**2+1.5d0*eta*(3-4*eta)*vv*vr**2
+C        A2=-.75d0*(12+29*eta)*(m/r)**2-eta*(3-4*eta)*vv**2
+C     &     -15.d0/8*eta*(1-3*eta)*vr**4+.5d0*eta*(13-4*eta)*(m/r)*vv
+C     &     +(2+25*eta+2*eta**2)*(m/r)*vr**2+1.5d0*eta*(3-4*eta)*vv*vr**2
 
         A2p5=8.d0/5*eta*(m/r)*vr*(17.d0/3*(m/r)+3*vv)
-        A3=(16+(1399./12-41./16*pi2)*eta+71./2*eta*eta)*(m/r)**3
-     &    +eta*(20827./840+123./64*pi2-eta**2)*(m/r)**2*vv
-     &    -(1+(22717./168+615./64*pi2)*eta+11./8*eta**2-7*eta**3)
-     &  *(m/r)**2*vr**2
-     &    -.25d0*eta*(11-49*eta+52*eta**2)*vv**3
-     &    +35./16*eta*(1-5*eta+5*eta**2)*vr**6
-     &    -.25d0*eta*(75+32*eta-40*eta**2)*(m/r)*vv**2
-     &    -.5d0*eta*(158-69*eta-60*eta**2)*(m/r)*vr**4
-     &    +eta*(121-16*eta-20*eta**2)*(m/r)*vv*vr**2
-     &    +3./8*eta*(20-79*eta+60*eta**2)*vv**2*vr**2
-     &    -15./8*eta*(4-18*eta+17*eta**2)*vv*vr**4
+C        A3=(16+(1399./12-41./16*pi2)*eta+71./2*eta*eta)*(m/r)**3
+C     &    +eta*(20827./840+123./64*pi2-eta**2)*(m/r)**2*vv
+C     &    -(1+(22717./168+615./64*pi2)*eta+11./8*eta**2-7*eta**3)
+C     &  *(m/r)**2*vr**2
+C     &    -.25d0*eta*(11-49*eta+52*eta**2)*vv**3
+C     &    +35./16*eta*(1-5*eta+5*eta**2)*vr**6
+C     &    -.25d0*eta*(75+32*eta-40*eta**2)*(m/r)*vv**2
+C     &    -.5d0*eta*(158-69*eta-60*eta**2)*(m/r)*vr**4
+C     &    +eta*(121-16*eta-20*eta**2)*(m/r)*vv*vr**2
+C     &    +3./8*eta*(20-79*eta+60*eta**2)*vv**2*vr**2
+C     &    -15./8*eta*(4-18*eta+17*eta**2)*vv*vr**4
 
-        A3p5=-8./5*eta*(m/r)*vr*(23./14*(43+14*eta)*(m/r)**2
-     &       +3./28*(61+70*eta)*vv**2
-     &       +70*vr**4+1./42*(519-1267*eta)*(m/r)*vv
-     &       +.25d0*(147+188*eta)*(m/r)*vr**2-15/4.*(19+2*eta)*vv*vr**2)
+C        A3p5=-8./5*eta*(m/r)*vr*(23./14*(43+14*eta)*(m/r)**2
+C     &       +3./28*(61+70*eta)*vv**2
+C     &       +70*vr**4+1./42*(519-1267*eta)*(m/r)*vv
+C     &       +.25d0*(147+188*eta)*(m/r)*vr**2-15/4.*(19+2*eta)*vv*vr**2)
 
-        B1=2*(2-eta)*vr
-        B2=-.5d0*vr*((4+41*eta+8*eta**2)*(m/r)-eta*(15+4*eta)*vv
-     &      +3*eta*(3+2*eta)*vr**2)
+C        B1=2*(2-eta)*vr
+C        B2=-.5d0*vr*((4+41*eta+8*eta**2)*(m/r)-eta*(15+4*eta)*vv
+C     &      +3*eta*(3+2*eta)*vr**2)
         B2p5=-8./5.*eta*(m/r)*(3*(m/r)+vv)
-        B3=vr*((4+(5849./840.+123./32.*pi2)*eta
-     &      -25*eta**2-8*eta**3)*(m/r)**2
-     &      +1./8.*eta*(65-152*eta-48*eta**2)*vv**2
-     &      +15/8.*eta*(3-8*eta-2*eta**2)*vr**4
-     &      +eta*(15+27*eta+10*eta**2)*(m/r)*vv
-     &      -1./6.*eta*(329+177*eta+108*eta**2)*(m/r)*vr**2
-     &      -.75*eta*(16-37*eta-16*eta**2)*vv*vr**2)
+C        B3=vr*((4+(5849./840.+123./32.*pi2)*eta
+C     &      -25*eta**2-8*eta**3)*(m/r)**2
+C     &      +1./8.*eta*(65-152*eta-48*eta**2)*vv**2
+C     &      +15/8.*eta*(3-8*eta-2*eta**2)*vr**4
+C     &      +eta*(15+27*eta+10*eta**2)*(m/r)*vv
+C     &      -1./6.*eta*(329+177*eta+108*eta**2)*(m/r)*vr**2
+C     &      -.75*eta*(16-37*eta-16*eta**2)*vv*vr**2)
      
-         B3p5=8./5.*eta*(m/r)*(1./42.*(1325+546*eta)*(m/r)**2
-     &    +1./28.*(313+42*eta)*vv**2+75*vr**4
-     &     -1./42.*(205+777*eta)*(m/r)*vv
-     &     +1./12.*(205+424*eta)*(m/r)*vr**2-.75*(113+2*eta)*vv*vr**2)
-     
-c                A3p5=0
-c                B3p5=0
+C         B3p5=8./5.*eta*(m/r)*(1./42.*(1325+546*eta)*(m/r)**2
+C     &    +1./28.*(313+42*eta)*vv**2+75*vr**4
+C     &     -1./42.*(205+777*eta)*(m/r)*vv
+c     &     +1./12.*(205+424*eta)*(m/r)*vr**2-.75*(113+2*eta)*vv*vr**2)
+
+C  SWITCHED OFF ALL THE PN TERMS EXCEPT FOR PN2.5
+                A1=0
+                B1=0
+                A2=0
+                B2=0
+                A3p5=0
+                B3p5=0
 c                A2p5=0
 c                B2p5=0
-c                A3=0
-c                B3=0
+                A3=0
+                B3=0
 
-            Atot=A1/c**2+A2/c**4+A2p5/c**5!+A3/c**6+A3p5/c**7
-            Btot=B1/c**2+B2/c**4+B2p5/c**5!+B3/c**6+B3p5/c**7
+            Atot=A2p5/c**5!A1/c**2+A2/c**4+A2p5/c**5!+A3/c**6+A3p5/c**7
+            Btot=B2p5/c**5!B1/c**2+B2/c**4+B2p5/c**5!+B3/c**6+B3p5/c**7
             Afric=A2p5/c**5!+A3p5/c**7 ! *0 IF you want to 
             Bfric=B2p5/c**5!+B3p5/c**7 ! *0    -"-
-         IF(I1.EQ.1)THEN
-         CALL gopu_SpinTerms(X,V,r,M1,m2,c,spina,dvq,dspin) ! spinterms ->dv3
-         ELSE
+C         IF(I1.EQ.1)THEN
+C         CALL gopu_SpinTerms(X,V,r,M1,m2,c,spina,dvq,dspin) ! spinterms ->dv3
+C         ELSE
          DO k=1,3
          dvq(k)=0
          dspin(k)=0
          END DO
-         END IF
+C         END IF
 
            DO k=1,3
            dV(k)=-m/r**2*(n(k)*Atot+v(k)*Btot)/m-dvq(k)/m ! in the code /m and +?-?
            dvgr(k)=-m/r**2*(n(k)*Afric+v(k)*Bfric)/m
            END DO
-c          turhia           
-c           rw=r/(2*m/c**2)
-c           fr=cDOt(x,dV)/r
-c           frm=fr-m/r**2
-       END
+
+        END
 
 
 
@@ -2948,14 +2909,15 @@ C        Non-chained contribution
          END DO ! J=I+2,N
         END DO  ! I=1,N-2
          dT=hs/(U*cmethod(1)+OMEGA*cmethod(2)+cmethod(3)) ! time interval
-           CALL Coordinate DepENDent Perturbations (acc) 
+
+        CALL Coordinate DepENDent Perturbations (acc)
                  DO i=1,n-1
                  DO k=1,3
                  L=3*(i-1)
                  FC(L+k)=f(3*i+k)-f(3*i+k-3)
                  END DO
                  END DO
-         IF(clight.GT.0.0)THEN       ! V-depENDent ACC 
+         IF(clight.GT.0.0)THEN       ! V-depENDent ACC
          CALL  V_jump(Ww,spinw,cmvw,WTTLw,WC,spin,FC,acc,dt/2
      &  ,gom,energyj,energrj,1) ! Auxiliary W (=Ww) etc
          CALL V_jump(WC,spin,cmv,WTTL,Ww,spinw,FC,acc,dt
@@ -2989,10 +2951,23 @@ C        Non-chained contribution
 
         CALL EVALUATE V(V,WCi)
 c adding V-dependent perts.
-        IF(clight.GT.0.0)THEN
+        IF(Clightpn.GT.0.0)THEN
             CALL Velocity Dependent Perturbations
      &           (dT,V,spini,acc,dcmv,df,dfGR,dspin)
         ELSE
+            DO I=1,3
+                DCMV(I) = 0.0  !avoid all kinds of COM
+            END DO
+            DO i=1,3*n
+                dfgr(i)=0
+            END DO
+            DO k=1,3
+                dspin(k)=0
+            END DO
+            DO k=1,3
+                spini(k)=0
+            END DO
+
             DO i=1,3*n
                 df(i)=acc(i)
             END DO
@@ -3535,7 +3510,7 @@ c       final correction of g's  & r-evaluation
 
         IMPLICIT REAL*8 (a-h,m,o-z)
         REAL*8 X(3),Y(3),SQUARE
-        COMMON/softening/ee,cmethod(3),clight,NofBH ! only ee needed here
+        COMMON/softening/ee,cmethod(3),clight,Clightpn,NofBH ! only ee needed here
         SAVE
 
         SQUARE=(X(1)-Y(1))**2+(X(2)-Y(2))**2+(X(3)-Y(3))**2+ee
