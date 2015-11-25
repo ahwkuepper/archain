@@ -299,8 +299,8 @@ C        CALL Reduce2cm(v,m,N,cmva)
 C       ENCOUNTER PROBABILITY COMPUTATION FOR TIDAL MASS GAIN
         DO I = 1,N
             RS=2.d0*M(I)/Clight**2 !Softening of order 4xSchwarzschild radius
-            RGAL = SQRT((X(3*I-2)+CMXA(1))**2+(X(3*I-1)+CMXA(2))**2
-     &                   +(X(3*I)+CMXA(3))**2+4.0*RS*RS)
+            RGAL = SQRT((X(3*I-2))**2+(X(3*I-1))**2
+     &                   +(X(3*I))**2+4.0*RS*RS)
 
             RHO = GALRHO(RGAL)
             SIGMA = GALSIG(RGAL)
@@ -326,12 +326,12 @@ C           Tidal disruption
             L=3*(I-1)
             K=3*(J-1)
             MA(I)=M(J)
-            XA(L+1) = X(K+1)+CMXA(1)
-            XA(L+2) = X(K+2)+CMXA(2)
-            XA(L+3) = X(K+3)+CMXA(3)
-            VA(L+1) = V(K+1)+CMVA(1)
-            VA(L+2) = V(K+2)+CMVA(2)
-            VA(L+3) = V(K+3)+CMVA(3)
+            XA(L+1) = X(K+1)!+CMX(1)
+            XA(L+2) = X(K+2)!+CMX(2)
+            XA(L+3) = X(K+3)!+CMX(3)
+            VA(L+1) = V(K+1)!+CMV(1)
+            VA(L+2) = V(K+2)!+CMV(2)
+            VA(L+3) = V(K+3)!+CMV(3)
          END DO
 
          RETURN
@@ -459,14 +459,14 @@ C       are assumed to be in the vector ACC.
 
 C---  init acc
         DO  I=1,N
-            RGAL2 = (X(3*I-2)+CMXA(1))**2+(X(3*I-1)
-     &           +CMXA(2))**2+(X(3*I)+CMXA(3))**2+RPL*RPL
+            RGAL2 = (X(3*I-2)+CMX(1))**2+(X(3*I-1)
+     &           +CMX(2))**2+(X(3*I)+CMX(3))**2+RPL*RPL
 
             ACCEL = MCL/RGAL2**1.5
 
-            ACC(3*I-2) = -ACCEL*(X(3*I-2)+CMXA(1))
-            ACC(3*I-1) = -ACCEL*(X(3*I-1)+CMXA(2))
-            ACC(3*I)   = -ACCEL*(X(3*I)+CMXA(3))
+            ACC(3*I-2) = -ACCEL*(X(3*I-2)+CMX(1))
+            ACC(3*I-1) = -ACCEL*(X(3*I-1)+CMX(2))
+            ACC(3*I)   = -ACCEL*(X(3*I)+CMX(3))
         END DO
 
         RETURN
@@ -1333,8 +1333,8 @@ c               IF(1.e-3*mmij.GT.m(i)*m(j).AND.cmethod(2).ne.0.0)THEN
         CHTIMEinc=CHTIMEinc+dT
         CHTIME=CHTIME+dT
         DO k=1,3
-            CMXinc(k)= 0.0 !CMXinc(k)+dt*cmv(k)
-            cmx(k)= 0.0 !cmx(k) +dt*cmv(k)
+            CMXinc(k)= CMXinc(k)+dt*cmv(k)
+            cmx(k)= cmx(k) +dt*cmv(k)
         END DO
         RETURN
         END
@@ -1358,7 +1358,7 @@ c               IF(1.e-3*mmij.GT.m(i)*m(j).AND.cmethod(2).ne.0.0)THEN
         WTTLw=WTTL
         DO k=1,3
             spinw(k)=spin(k)
-            cmvw(k)= 0.0 !cmv(k)
+            cmvw(k)= cmv(k)
         END DO
 
         RETURN
@@ -1601,8 +1601,8 @@ C        Center of mass
             END DO
         END DO
         DO K=1,3
-            CMX(K)=0.0 !CMX(K)/MASS
-            CMV(K)=0.0 !CMV(K)/MASS
+            CMX(K)=CMX(K)/MASS
+            CMV(K)=CMV(K)/MASS
         END DO
 c       Rearange according to chain indices.
         DO I=1,N
@@ -1666,8 +1666,8 @@ C        Rearrange according to INAME(i) and add CM.
             L=3*(I-1)
             LF=3*(INAME(I)-1)
             DO K=1,3
-                X(LF+K)=XI(L+K)-X0(K)!+CMX(K) ! CM-coords
-                V(LF+K)=VI(L+K)-V0(K)!+CMV(K) ! CM-vels
+                X(LF+K)=XI(L+K)-X0(K)+CMX(K) ! CM-coords
+                V(LF+K)=VI(L+K)-V0(K)+CMV(K) ! CM-vels
             END DO
         END DO
         RETURN
@@ -1971,11 +1971,11 @@ c       END of I-loop
         END DO
         DO i=1,3
         L=L+1
-        Y(L)= 0.0 !CMXinc(I)
+        Y(L)= CMXinc(I)
         END DO
         DO i=1,3
         L=L+1
-        Y(L)= 0.0 !CMVinc(I)
+        Y(L)= CMVinc(I)
         END DO
         L=L+1
         Y(L)=ENERGYinc
@@ -2014,11 +2014,11 @@ c        Nvar=L
         END DO
         DO i=1,3
         L=L+1
-        CMX(I)= 0.0 !Y(L)
+        CMX(I)= Y(L)
         END DO
         DO i=1,3
         L=L+1
-        CMV(I)= 0.0 !Y(L)
+        CMV(I)= Y(L)
         END DO
         L=L+1
         ENERGY=Y(L)
@@ -2057,11 +2057,11 @@ c        Nvar=L
         END DO
         DO i=1,3
         L=L+1
-        Y(L)= 0.0 !CMX(I)
+        Y(L)= CMX(I)
         END DO
         DO i=1,3
         L=L+1
-        Y(L)= 0.0 !CMV(I)
+        Y(L)= CMV(I)
         END DO
         L=L+1
         Y(L)=ENERGY
@@ -2204,7 +2204,7 @@ C        Rearrange according to INAME(i) and add CM.
         L=3*(I-1)
         LF=3*(INAME(I)-1)
         DO K=1,3
-        X(LF+K)=XI(L+K)-X0(K)!+CMX(K) ! CM-coords
+        X(LF+K)=XI(L+K)-X0(K)+CMX(K) ! CM-coords
         END DO
         END DO
         RETURN
@@ -2244,7 +2244,7 @@ C        Rearrange according to INAME(i) and add CM.
         L=3*(I-1)
         LF=3*(INAME(I)-1)
         DO K=1,3
-        VN(LF+K)=VI(L+K)-V0(K)!+CMV(K)
+        VN(LF+K)=VI(L+K)-V0(K)+CMV(K)
         V(LF+K)=VN(LF+K) ! 
         END DO
         END DO
@@ -2955,9 +2955,9 @@ c adding V-dependent perts.
             CALL Velocity Dependent Perturbations
      &           (dT,V,spini,acc,dcmv,df,dfGR,dspin)
         ELSE
-            DO I=1,3
-                DCMV(I) = 0.0  !avoid all kinds of COM
-            END DO
+C            DO I=1,3
+C                DCMV(I) = 0.0  !avoid all kinds of COM
+C            END DO
             DO i=1,3*n
                 dfgr(i)=0
             END DO
@@ -3024,12 +3024,12 @@ c adding V-dependent perts.
 
         DO k=1,3
             spinj(k)=spinj(k)+dT*dspin(k)
-            cmvj(k)= 0.0 !cmvj(k)+dT*dcmv(k)
+            cmvj(k)= cmvj(k)+dT*dcmv(k)
         END DO
         IF(ind.EQ.2)THEN
             DO k=1,3
                 spin inc(k)=spin inc(k)+dT*dspin(k)
-                cmv inc(k)= 0.0 !cmv inc(k)+dT*dcmv(k)
+                cmv inc(k)= cmv inc(k)+dT*dcmv(k)
             END DO
         END IF ! ind.EQ.2
 
@@ -3109,8 +3109,8 @@ c adding V-depENDent perts.
         END DO
 
         DO k=1,3
-        cmv inc(k)= 0.0 !cmv inc(k)+dT*dcmv(k)
-        cmvj(k)= 0.0 !cmvj(k)+dT*dcmv(k)
+        cmv inc(k)= cmv inc(k)+dT*dcmv(k)
+        cmvj(k)= cmvj(k)+dT*dcmv(k)
         END DO
         RETURN
         END
