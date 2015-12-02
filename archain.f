@@ -92,17 +92,40 @@ C       for tidal mass gain
             index4output(I)=I  ! initialize output index (to be modified in case of merger)
         END DO
 
-c       Put into center-of-mass frame
         CALL Reduce2cm(xa,ma,NA,cmxa)
         CALL Reduce2cm(va,ma,NA,cmva)
+
         DO I=1,3
-            CMXA(I) = 0.0
-            CMVA(I) = 0.0
+            CMXX(I) = 0.0
+            CMVX(I) = 0.0
             CMX(I) = 0.0
             CMV(I) = 0.0
         END DO
 
+        DO I=1,NA
+            K=3*(I-1)
+            M(I)=MA(I)
+            X(K+1) = XA(K+1)
+            X(K+2) = XA(K+2)
+            X(K+3) = XA(K+3)
+            V(K+1) = VA(K+1)
+            V(K+2) = VA(K+2)
+            V(K+3) = VA(K+3)
+        END DO
+
+        DO I=1,N
+            L=3*(I-1)
+            MA(I)=M(I)
+            XA(L+1) = X(L+1)+CMXX(1)+CMXA(1)
+            XA(L+2) = X(L+2)+CMXX(2)+CMXA(2)
+            XA(L+3) = X(L+3)+CMXX(3)+CMXA(3)
+            VA(L+1) = V(L+1)+CMVX(1)+CMVA(1)
+            VA(L+2) = V(L+2)+CMVX(2)+CMVA(2)
+            VA(L+3) = V(L+3)+CMVX(3)+CMVA(3)
+        END DO
+
         DELT = 0.0
+        NEWREG = .true.
 
         GOTO 200
 
@@ -143,6 +166,7 @@ C       Include diffusion through encounters with stars
         CALL DIFFUSION(DELT)
         NEWREG = .true.
 
+
         TIME1 = TIME
         CALL CHAINEVOLVE
      &   (TIME,DELTAT,EPS,NEWREG,KSMX,soft,cmet,clight,Ixc,NBH,
@@ -170,14 +194,16 @@ C       Include diffusion through encounters with stars
 
         WRITE(6,123)TIME*14.90763847!  /twopi
      & ,log((Tkin-ENERGY-EnerGR)/Upot),dSkin/dSpot-1,am_error!logH = the primary constant (=0!)
-     & ,N, MCL, RPL  ! print time, logH, N (of bodies left)
+     & ,N, MCL, RPL, CMX(1), CMXA(1)  ! print time, logH, N (of bodies left)
         CALL FLUSH(6)
 123     FORMAT(1x,'T: ',1p,g20.6,' dE/U=',1p,g10.2,
      &   ' dSDOt/sDOtU=',1p,g10.2,
      &   '   d(RxV)/Am=',1p,g10.2,
      &   ' Nb=',0p,1x,i3,
      &   '   MCL=',1p,g10.2,
-     &   '   RPL=',1p,g10.2)
+     &   '   RPL=',1p,g10.2,
+     &   '   CMX=',1p,g10.2,
+     &   '   CMXA=',1p,g10.2)
 
 
 200     CONTINUE
@@ -271,67 +297,75 @@ C HAS TO BE WRITTEN!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
  10     CONTINUE
 
-         DO J=1,N
-            I = index4output(J)
+
+        DO I=1,N
+            J = index4output(I)
             L=3*(J-1)
             K=3*(I-1)
-            M(J)=MA(I)
-            X(L+1) = XA(K+1)
-            X(L+2) = XA(K+2)
-            X(L+3) = XA(K+3)
-            V(L+1) = VA(K+1)
-            V(L+2) = VA(K+2)
-            V(L+3) = VA(K+3)
-         END DO
+            M(I)=MA(J)
+            X(K+1) = XA(L+1)-CMXA(1)
+            X(K+2) = XA(L+2)-CMXA(2)
+            X(K+3) = XA(L+3)-CMXA(3)
+            V(K+1) = VA(L+1)-CMVA(1)
+            V(K+2) = VA(L+2)-CMVA(2)
+            V(K+3) = VA(L+3)-CMVA(3)
+        END DO
+
 
 c       Put into center-of-mass frame
-C        CALL Reduce2cm(x,m,N,cmxa)
-C        CALL Reduce2cm(v,m,N,cmva)
+        CALL Reduce2cm(x,m,N,cmxx)
+        CALL Reduce2cm(v,m,N,cmvx)
+
+C        DO I=1,3
+C            CMX(I) = 0.0
+C            CMV(I) = 0.0
+C        END DO
 
         TIME1 = TIME
         CALL  ARC
      &  (TIME,tstep,TOL,NEWREG,KSMX,soft,cmet,cl,Ixc,NBH,
      &   spini)
+
         TIME2 = TIME
         DELT = TIME2-TIME1
 
+        IF (icollision.NE.0) THEN ! handle a collison
+            nmerger = nmerger + 1
+            CALL  Merge_i1_i2(time)   ! merge the two particles
+        ENDIF
+
+        DO J=1,N
+            I = index4output(J)
+            L=3*(I-1)
+            K=3*(J-1)
+            MA(I)=M(J)
+            XA(L+1) = X(K+1)+CMXX(1)+CMXA(1)
+            XA(L+2) = X(K+2)+CMXX(2)+CMXA(2)
+            XA(L+3) = X(K+3)+CMXX(3)+CMXA(3)
+            VA(L+1) = V(K+1)+CMVX(1)+CMVA(1)
+            VA(L+2) = V(K+2)+CMVX(2)+CMVA(2)
+            VA(L+3) = V(K+3)+CMVX(3)+CMVA(3)
+         END DO
 
 C       ENCOUNTER PROBABILITY COMPUTATION FOR TIDAL MASS GAIN
-        DO I = 1,N
-            RS=2.d0*M(I)/Clight**2 !Softening of order 4xSchwarzschild radius
-            RGAL = SQRT((X(3*I-2))**2+(X(3*I-1))**2
-     &                   +(X(3*I))**2+4.0*RS*RS)
+        DO J = 1,N
+            I = index4output(J)
+            RS=2.d0*MA(I)/Clight**2 !Softening of order 4xSchwarzschild radius
+            RGAL = SQRT((XA(3*I-2))**2+(XA(3*I-1))**2
+     &                   +(XA(3*I))**2+4.0*RS*RS)
 
             RHO = GALRHO(RGAL)
             SIGMA = GALSIG(RGAL)
 
 C           Tidal disruption
-            R_T = RSTAR*(M(I)/MSTAR)**0.3333333
+            R_T = RSTAR*(MA(I)/MSTAR)**0.3333333
             LBD = 10.0**0.11*(2.0*MSTAR/(RSTAR*SIGMA*SIGMA))**0.0899
             R_TC = LBD*R_T   !Tidal capture radius
-            SCAP = PI*R_TC*R_TC*(1.0+2.0*(M(I)+
+            SCAP = PI*R_TC*R_TC*(1.0+2.0*(MA(I)+
      &           MSTAR)/(R_TC*SIGMA*SIGMA)) !capture cross section
             dPROB = RHO/MSTAR*SCAP*SIGMA*DELT
             PROB_TC(I) = PROB_TC(I) + dPROB
             dPROB_TC(I) = dPROB_TC(I) + dPROB
-         END DO
-
-         IF (icollision.NE.0) THEN ! handle a collison
-            nmerger = nmerger + 1
-            CALL  Merge_i1_i2(time)   ! merge the two particles
-         ENDIF
-
-         DO J=1,N
-            I = index4output(J)
-            L=3*(I-1)
-            K=3*(J-1)
-            MA(I)=M(J)
-            XA(L+1) = X(K+1)!+CMX(1)
-            XA(L+2) = X(K+2)!+CMX(2)
-            XA(L+3) = X(K+3)!+CMX(3)
-            VA(L+1) = V(K+1)!+CMV(1)
-            VA(L+2) = V(K+2)!+CMV(2)
-            VA(L+3) = V(K+3)!+CMV(3)
          END DO
 
          RETURN
@@ -446,7 +480,7 @@ c         New value of the number of bodies.
 
         INCLUDE 'archain.h'
         COMMON/galaxy/MCL,RPL
-        REAL*8 ACC(NMX3)
+        REAL*8 ACC(*)
         REAL*8 RGAL2, ACCEL
         SAVE
 
@@ -459,14 +493,16 @@ C       are assumed to be in the vector ACC.
 
 C---  init acc
         DO  I=1,N
-            RGAL2 = (X(3*I-2)+CMX(1))**2+(X(3*I-1)
-     &           +CMX(2))**2+(X(3*I)+CMX(3))**2+RPL*RPL
+            RGAL2 = (X(3*I-2)+CMX(1)+CMXA(1))**2+(X(3*I-1)
+     &           +CMX(2)+CMXA(2))**2+(X(3*I)+CMX(3)
+     &           +CMXA(3))**2+RPL*RPL
 
-            ACCEL = MCL/RGAL2**1.5
+            ACCEL = 1.0d0*MCL/RGAL2**1.5
 
-            ACC(3*I-2) = -ACCEL*(X(3*I-2)+CMX(1))
-            ACC(3*I-1) = -ACCEL*(X(3*I-1)+CMX(2))
-            ACC(3*I)   = -ACCEL*(X(3*I)+CMX(3))
+            ACC(3*I-2) = -ACCEL*(X(3*I-2)+CMX(1)+CMXA(1))
+            ACC(3*I-1) = -ACCEL*(X(3*I-1)+CMX(2)+CMXA(2))
+            ACC(3*I)   = -ACCEL*(X(3*I)+CMX(3)+CMXA(3))
+
         END DO
 
         RETURN
@@ -500,20 +536,14 @@ C       Relativistic accelerations
             DO k=1,3
                 dspin(k)=0
             END DO
-            DO k=1,3
-                spina(k)=0
-            END DO
         END IF
 
-        DO i=1,3*n
+        DO i=1,n
             DF(3*I-2)=ACC(3*I-2) + DFR(3*I-2)
             DF(3*I-1)=ACC(3*I-1) + DFR(3*I-1)
             DF(3*I)=ACC(3*I) + DFR(3*I)
         END DO
-C        CALL reduce 2 cm(df,m,n,dcmv)  !avoid all kinds of COM
-        DO I=1,3
-            DCMV(I) = 0.0
-        END DO
+        CALL reduce 2 cm(df,m,n,dcmv)
 
         RETURN
 
@@ -1023,7 +1053,7 @@ C           step=0
             itemax_used=0
             ee=soft**2  ! to COMMON
             DO k=1,3
-                spin(k)=spini(k) ! SPIN
+                spin(k)= spini(k) ! SPIN
                 cmethod(k)=cmet(k) ! -"-
             END DO
             clight=cl    ! -"-
@@ -1053,6 +1083,10 @@ C           step=0
         CALL CONSTANTS OF MOTION(ENERGY,G0,ALAG)
         EnerGr=0 ! energy radiated away
         gtime=1/ALAG
+        do K=1,3
+           CMX(K)=CMXX(K)
+           CMV(K)=CMVX(K)
+        end do
         CALL omegacoef
         STIME=0.0
         NEWREG=.FALSE.
@@ -1135,7 +1169,9 @@ C           step=0
         IF(stimex.EQ.0.0)stimex=step
         CALL update x and v
         DO I=1,3
-            spini(I)=spin(I)
+            spini(I)= spin(I)
+            CMXX(I)=CMX(I)
+            CMVX(I)=CMV(I)
         END DO
 
         TIME=TIME+CHTIME
@@ -1357,7 +1393,7 @@ c               IF(1.e-3*mmij.GT.m(i)*m(j).AND.cmethod(2).ne.0.0)THEN
         END DO
         WTTLw=WTTL
         DO k=1,3
-            spinw(k)=spin(k)
+            spinw(k)= spin(k)
             cmvw(k)= cmv(k)
         END DO
 
@@ -1449,7 +1485,7 @@ C        Is this a triangle with smallest size not regularised?
      &              /((M(I)*M(J))*(M(I)+M(J)))
         IF (TINSPIRAL.le.THUBBLE) THEN
             clightpn = 1.0
-            write(*,*) TINSPIRAL, I, J
+            write(*,*) TINSPIRAL, I, J   !not entirely correct, since RIJ is only distance in one coordinate
         ENDIF
         IJ(L,1)=I
         IJ(L,2)=J
@@ -1596,13 +1632,13 @@ C        Center of mass
             MC(I)=M(INAME(I)) ! masses along the chain
             MASS=MASS+MC(I)
             DO K=1,3
-                CMX(K)=CMX(K)+M(I)*X(L+K)
-                CMV(K)=CMV(K)+M(I)*V(L+K)
+                CMX(K)= CMX(K)+M(I)*X(L+K)
+                CMV(K)= CMV(K)+M(I)*V(L+K)
             END DO
         END DO
         DO K=1,3
-            CMX(K)=CMX(K)/MASS
-            CMV(K)=CMV(K)/MASS
+            CMX(K)= CMX(K)/MASS
+            CMV(K)= CMV(K)/MASS
         END DO
 c       Rearange according to chain indices.
         DO I=1,N
@@ -1666,8 +1702,8 @@ C        Rearrange according to INAME(i) and add CM.
             L=3*(I-1)
             LF=3*(INAME(I)-1)
             DO K=1,3
-                X(LF+K)=XI(L+K)-X0(K)+CMX(K) ! CM-coords
-                V(LF+K)=VI(L+K)-V0(K)+CMV(K) ! CM-vels
+                X(LF+K)=XI(L+K)-X0(K)
+                V(LF+K)=VI(L+K)-V0(K)
             END DO
         END DO
         RETURN
@@ -2204,7 +2240,7 @@ C        Rearrange according to INAME(i) and add CM.
         L=3*(I-1)
         LF=3*(INAME(I)-1)
         DO K=1,3
-        X(LF+K)=XI(L+K)-X0(K)+CMX(K) ! CM-coords
+        X(LF+K)=XI(L+K)-X0(K)
         END DO
         END DO
         RETURN
@@ -2244,7 +2280,7 @@ C        Rearrange according to INAME(i) and add CM.
         L=3*(I-1)
         LF=3*(INAME(I)-1)
         DO K=1,3
-        VN(LF+K)=VI(L+K)-V0(K)+CMV(K)
+        VN(LF+K)=VI(L+K)-V0(K)
         V(LF+K)=VN(LF+K) ! 
         END DO
         END DO
@@ -2346,7 +2382,7 @@ c                         test=.99*Rs
             RETURN
             END IF
          DO k=1,3
-         dspin(k)=dspin(k)+dsp(k)
+         dspin(k)= dspin(k)+dsp(k)
          END DO
         ACC(I1)=ACC(I1)+m(j)*dF(1) ! here I assume action = reaction
         ACC(I2)=ACC(I2)+m(j)*dF(2) ! which is not REALly true for 
@@ -2452,14 +2488,14 @@ c                B2p5=0
             Btot=B2p5/c**5!B1/c**2+B2/c**4+B2p5/c**5!+B3/c**6+B3p5/c**7
             Afric=A2p5/c**5!+A3p5/c**7 ! *0 IF you want to 
             Bfric=B2p5/c**5!+B3p5/c**7 ! *0    -"-
-C         IF(I1.EQ.1)THEN
-C         CALL gopu_SpinTerms(X,V,r,M1,m2,c,spina,dvq,dspin) ! spinterms ->dv3
-C         ELSE
+         IF(I1.EQ.1)THEN
+         CALL gopu_SpinTerms(X,V,r,M1,m2,c,spina,dvq,dspin) ! spinterms ->dv3
+         ELSE
          DO k=1,3
          dvq(k)=0
          dspin(k)=0
          END DO
-C         END IF
+         END IF
 
            DO k=1,3
            dV(k)=-m/r**2*(n(k)*Atot+v(k)*Btot)/m-dvq(k)/m ! in the code /m and +?-?
@@ -2951,27 +2987,14 @@ C        Non-chained contribution
 
         CALL EVALUATE V(V,WCi)
 c adding V-dependent perts.
-        IF(Clightpn.GT.0.0)THEN
+        if(clight.gt.0.0)then
             CALL Velocity Dependent Perturbations
      &           (dT,V,spini,acc,dcmv,df,dfGR,dspin)
-        ELSE
-C            DO I=1,3
-C                DCMV(I) = 0.0  !avoid all kinds of COM
-C            END DO
-            DO i=1,3*n
-                dfgr(i)=0
-            END DO
-            DO k=1,3
-                dspin(k)=0
-            END DO
-            DO k=1,3
-                spini(k)=0
-            END DO
-
-            DO i=1,3*n
+        else
+            do i=1,3*n
                 df(i)=acc(i)
-            END DO
-        END IF
+            end do
+        end if
         DO i=1,n-1
             L=3*I-3
             I1=3*INAME(I)-3
@@ -3023,12 +3046,12 @@ C            END DO
         END DO
 
         DO k=1,3
-            spinj(k)=spinj(k)+dT*dspin(k)
+            spinj(k)= spinj(k)+dT*dspin(k)
             cmvj(k)= cmvj(k)+dT*dcmv(k)
         END DO
         IF(ind.EQ.2)THEN
             DO k=1,3
-                spin inc(k)=spin inc(k)+dT*dspin(k)
+                spin inc(k)= spin inc(k)+dT*dspin(k)
                 cmv inc(k)= cmv inc(k)+dT*dcmv(k)
             END DO
         END IF ! ind.EQ.2
@@ -3059,10 +3082,8 @@ C            END DO
         END DO
         END DO
         CALL EVALUATE V(V,WCi) 
-!        CALL reduce 2 cm(acc,m,n,dcmv)
-        DO I=1,3
-            DCMV(I) = 0.0  !avoid all kinds of COM
-        END DO
+        CALL reduce 2 cm(acc,m,n,dcmv)
+
         DO I=1,3*N
             V(I)=V(I)+acc(I)*dT/2 ! average Velocity
         END DO
@@ -3208,7 +3229,7 @@ c     evaluate lenght of chain
          END DO 
          END DO
         IF(iwr.GT.0)  WRITE(91,*)nr,nx
-        RETURN 
+        RETURN
          END
 
 
