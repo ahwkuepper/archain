@@ -18,7 +18,7 @@
         COMMON/galaxy/MCL,RPL
         REAL*8 G0(3),G(3),cmet(3),xw(3),vw(3),xwr(NMX3)
      &   ,ai(NMX),ei(NMX),unci(NMX),Omi(NMX),ooi(NMX)
-        REAL*8 PROB_TC(NMX), dPROB_TC(NMX), R_T, RSTAR
+        REAL*8 PROB_TC(NMX),dPROB_TC(NMX),R_T,R_TC,RSTAR
         REAL*8 TIME1, TIME2, DELT, RGAL, VBH, EPOT
         LOGICAL NEWREG
         CHARACTER*50 OUTFILE, OUTNAME
@@ -59,7 +59,7 @@
         EPS=tolerance
         ENER0=0
         NEWREG=.TRUE.
-        KSMX=1000000 ! only this many steps without RETURN
+        KSMX=10000000 ! only this many steps without RETURN
         NOUT = 0 !count outputs
 
 C       for tidal mass gain
@@ -139,6 +139,7 @@ C       Include mass gain through tidal disruptions/captures
         DO J=1,N
             I = index4output(J)
             R_T = RSTAR*(MA(I)/MSTAR)**0.3333333
+            R_TC = 2.0*R_T   !Tidal capture radius (approximated here)
             DO 1 WHILE (dPROB_TC(I).GT.0.0)
                 CALL RANDOM_NUMBER(RNR)
                 IF (dPROB_TC(I).GT.RNR) THEN      !check for tidal capture, tidal disruption or physical collision
@@ -220,32 +221,36 @@ C     &                   +XA(3*I)**2+4.0*RS*RS)
 C            EPOT = ...
 C            EA(I) = 0.5*MA(I)*VBH**2+EPOT
 C        END DO
-C HAS TO BE WRITTEN!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+C YET, HAS TO BE WRITTEN!
 
+
+C  short output to save space
         WRITE(66,234) time*14.90763847,MCL,RPL,
-     &    (Ma(k), xa(3*k-2),xa(3*k-1),xa(3*k),
-     &     va(3*k-2)/14.90763847,va(3*k-1)/14.90763847,
-     &     va(3*k)/14.90763847, PROB_TC(k), k=1,na)
+     &    (Ma(k), SQRT(XA(3*k-2)**2+XA(3*k-1)**2
+     &                   +XA(3*k)**2), k=1,na)
 
-        NTIME = time/DTOUT*14.90763847+0.99999 !round up
-        NTIME = NTIME*DTOUT
-        WRITE(OUTTIME,233) NTIME
-233        FORMAT(I6.6)
-        OPEN(20, FILE=OUTNAME(1:LD)//'.'//OUTTIME, STATUS='REPLACE')
-        DO I=1,NA
-            WRITE(20,*) time*14.90763847,
-     &           xa(3*I-2), xa(3*I-1),xa(3*I),va(3*I-2)
-     &           /14.90763847, va(3*I-1)/14.90763847,
-     &           va(3*I)/14.90763847, PROB_TC(I)
-        END DO
-        NOUT = NOUT + 1
-        CLOSE(20)
+C  diagnostic output
+C        WRITE(66,234) time*14.90763847,MCL,RPL,
+C     &    (Ma(k), xa(3*k-2),xa(3*k-1),xa(3*k),
+C     &     va(3*k-2)/14.90763847,va(3*k-1)/14.90763847,
+C     &     va(3*k)/14.90763847, PROB_TC(k), k=1,na)
+C
+C        NTIME = time/DTOUT*14.90763847+0.99999 !round up
+C        NTIME = NTIME*DTOUT
+C        WRITE(OUTTIME,233) NTIME
+C233        FORMAT(I6.6)
+C        OPEN(20, FILE=OUTNAME(1:LD)//'.'//OUTTIME, STATUS='REPLACE')
+C        DO I=1,NA
+C            WRITE(20,*) ma(I),
+C     &           xa(3*I-2), xa(3*I-1),xa(3*I),va(3*I-2)
+C     &           /14.90763847, va(3*I-1)/14.90763847,
+C     &           va(3*I)/14.90763847
+C        END DO
+C        NOUT = NOUT + 1
+C        CLOSE(20)
         CALL FLUSH(66)
 
 234     FORMAT(1x,f18.6,1p,600g13.5)
-
-        IF(iwr.GT.1)CALL FIND BINARIES(time) ! this is usually unimportant
-
 
         IF(TIME.LT.TMAX)THEN
             GOTO 100
@@ -315,11 +320,6 @@ c       Put into center-of-mass frame
         CALL Reduce2cm(x,m,N,cmxx)
         CALL Reduce2cm(v,m,N,cmvx)
 
-C        DO I=1,3
-C            CMX(I) = 0.0
-C            CMV(I) = 0.0
-C        END DO
-
         TIME1 = TIME
         CALL  ARC
      &  (TIME,tstep,TOL,NEWREG,KSMX,soft,cmet,cl,Ixc,NBH,
@@ -328,10 +328,14 @@ C        END DO
         TIME2 = TIME
         DELT = TIME2-TIME1
 
-        IF (icollision.NE.0) THEN ! handle a collison
-            nmerger = nmerger + 1
-            CALL  Merge_i1_i2(time)   ! merge the two particles
+C       Check for collisions and merge particles
+ 11     IF (icollision.NE.0) THEN ! handle a collison
+                nmerger = nmerger + 1
+                CALL  Merge_i1_i2(time)   ! merge the two particles
         ENDIF
+
+        CALL COLLISIONCHECK()
+        IF (icollision.NE.0) GOTO 11
 
         DO J=1,N
             I = index4output(J)
@@ -353,6 +357,7 @@ C       ENCOUNTER PROBABILITY COMPUTATION FOR TIDAL MASS GAIN
             RGAL = SQRT((XA(3*I-2))**2+(XA(3*I-1))**2
      &                   +(XA(3*I))**2+4.0*RS*RS)
 
+
             RHO = GALRHO(RGAL)
             SIGMA = GALSIG(RGAL)
 
@@ -365,11 +370,65 @@ C           Tidal disruption
             dPROB = RHO/MSTAR*SCAP*SIGMA*DELT
             PROB_TC(I) = PROB_TC(I) + dPROB
             dPROB_TC(I) = dPROB_TC(I) + dPROB
+
+C           Handle escape of particles -- set escape radius here!
+            IF (RGAL.gt.1000.0) THEN
+                CALL ESCAPE(J)
+            END IF
+
          END DO
 
          RETURN
          END
 
+
+
+************************************************************
+************************************************************
+
+C       Check for collisions between all particles
+
+        SUBROUTINE COLLISIONCHECK()
+
+        INCLUDE 'archain.h'
+        COMMON/collision/icollision,ione,itwo,iwarning
+        REAL*8 dx(3), Cl
+        SAVE
+
+        Cl=Clight! SPEED OF LIGHT
+        DO I=1,N
+            I3=3*I
+            I2=I3-1
+            I1=I3-2
+            DO  J=I+1,N
+                IF(min(i,j).le.NofBH)THEN  ! only BH - BH, max->min => BH*
+                J3=3*J
+                J2=J3-1
+                J1=J3-2
+                dx(1)=X(J1)-X(I1)
+                dx(2)=X(J2)-X(I2)
+                dx(3)=X(J3)-X(I3)
+                RS=2.d0*(m(i)+m(j))/CL**2
+                RIJ2=dx(1)**2+dx(2)**2+dx(3)**2
+                rij=sqrt(rij2)
+                test= 10000.0*RS!4*RS !Collision Criterium
+                IF(rij.LT.test.AND.iwarning.LT.2)
+     &  WRITE(6,*)' Near collision: r/RS',rij/RS,i,j,m(i),m(j)
+     &  ,sqrt(vij2)/cl
+                IF(rij.LT.test)THEN
+                    iwarning=iwarning+1
+                    icollision=1   ! collision indicator
+                    ione=min(i,j)
+                    itwo=max(i,j)
+                    RETURN
+                END IF
+                END IF
+            END DO
+        END DO
+
+        RETURN
+
+        END
 
 ************************************************************
 ************************************************************
@@ -473,6 +532,66 @@ c         New value of the number of bodies.
             RETURN
             END
 
+
+************************************************************
+************************************************************
+
+C           Handle escape of particle
+
+            SUBROUTINE ESCAPE(Ione)
+
+            INCLUDE 'archain.h'
+            REAL*8 SM(NMX),XR(NMX3),XDR(NMX3)
+            COMMON/outputindex/index4output(200)
+
+            SAVE
+
+            WRITE(6,*)' Masses initially:',(M(k),k=1,N)
+            DO I=1,ione-1
+                SM(I)=M(I)
+                DO  K=1,3
+                    XR(3*I-3+K)=X(3*I-3+K)
+                    XDR(3*I-3+K)=V(3*I-3+K)
+                END DO
+            END DO
+
+            DO I=Ione+1,N
+                sm(i)=m(i)
+                DO k=1,3
+                    XR(3*I-3+K)=X(3*I-3+k)
+                    XDR(3*I-3+K)=V(3*I-3+k)
+                END DO
+            END DO
+          
+            DO i=Ione,N-1
+                index4output(i)=index4output(i+1)
+            END  DO
+
+c         New value of the number of bodies.
+            N=N-1
+            IF(Ione.le.NofBH) NofBH=NofBH-1 ! # of BH's reduced!
+
+
+            DO 8 I=1,N
+                M(I)=SM(I)
+                DO 7 K=1,3
+                    X(3*i-3+k)=XR(3*i-3+k)
+                    V(3*i-3+k)=XDR(3*i-3+k)
+7               CONTINUE
+8           CONTINUE
+
+            iescape=0
+
+            WRITE(6,*)' Escape:',ione,' N, NBH=',N,NofBH
+     &     ,' masses ',(M(k),k=1,N)
+
+            IF(N.EQ.1)THEN! N.EQ.1!!!!!!!!!!!
+                WRITE(6,*)' Only one body left!'
+                STOP
+            END IF
+
+            RETURN
+            END
 
 
 
@@ -2588,9 +2707,7 @@ c        Grav.Rad.-terms
                       END IF
         END DO ! J
         END DO ! I
-         DO k=1,3
-         akiih(k)=acc(k+3)
-         END DO ! REMOVE THIS LOOP(diagno only)
+
         RETURN
         END
 
