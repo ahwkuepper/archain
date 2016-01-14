@@ -418,8 +418,8 @@ C       Check for collisions between all particles
                 IF(rij.LT.test)THEN
                     iwarning=iwarning+1
                     icollision=1   ! collision indicator
-                    ione=min(M(i),M(j))
-                    itwo=max(M(i),M(j))
+                    ione=min(M(i)*1.001,M(j))
+                    itwo=max(M(i)*1.001,M(j))
                     RETURN
                 END IF
                 END IF
@@ -2683,8 +2683,8 @@ c                         test=.99*Rs
             IF(rij.LT.test)THEN!
             iwarning=iwarning+1
             icollision=1   ! collision indicator
-            ione=min(M(i),M(j))
-            itwo=max(M(i),M(j))
+            ione=min(M(i)*1.001,M(j))
+            itwo=max(M(i)*1.001,M(j))
             RETURN
             END IF
          DO k=1,3
