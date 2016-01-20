@@ -418,8 +418,8 @@ C       Check for collisions between all particles
                 IF(rij.LT.test)THEN
                     iwarning=iwarning+1
                     icollision=1   ! collision indicator
-                    ione=min(M(i)*1.001,M(j))
-                    itwo=max(M(i)*1.001,M(j))
+                    ione=max(M(i)*1.001,M(j))
+                    itwo=min(M(i)*1.001,M(j))
                     RETURN
                 END IF
                 END IF
@@ -524,10 +524,10 @@ c         New value of the number of bodies.
             ione=0
             itwo=0
 
-            IF(N.EQ.1)THEN! N.EQ.1!!!!!!!!!!!
-                WRITE(6,*)' Only one body left!'
-                STOP
-            END IF
+C            IF(N.EQ.1)THEN! N.EQ.1!!!!!!!!!!!
+C                WRITE(6,*)' Only one body left!'
+C                STOP
+C            END IF
 
             RETURN
             END
@@ -585,10 +585,10 @@ c         New value of the number of bodies.
             WRITE(6,*)' Escape:',ione,' N, NBH=',N,NofBH
      &     ,' masses ',(M(k),k=1,N)
 
-            IF(N.EQ.1)THEN! N.EQ.1!!!!!!!!!!!
-                WRITE(6,*)' Only one body left!'
-                STOP
-            END IF
+C            IF(N.EQ.1)THEN! N.EQ.1!!!!!!!!!!!
+C                WRITE(6,*)' Only one body left!'
+C                STOP
+C            END IF
 
             RETURN
             END
@@ -1325,6 +1325,10 @@ c       Initial constants of motion
             WRITE(6,*)' Try increasing NMX in archain.h '
             WRITE(6,*)' and increase some (large) dimensions ELSEwhere'
             WRITE(6,*)' in the same proportion.  STOPPING'
+            STOP
+        END IF
+        IF(N.LT.2)THEN
+            WRITE(6,*)' Only 1 body left '
             STOP
         END IF
 c           IF(cmet(1).EQ.0.0 .AND. cmet(2).ne.0.0)THEN
@@ -2683,8 +2687,8 @@ c                         test=.99*Rs
             IF(rij.LT.test)THEN!
             iwarning=iwarning+1
             icollision=1   ! collision indicator
-            ione=min(M(i)*1.001,M(j))
-            itwo=max(M(i)*1.001,M(j))
+            ione=max(M(i)*1.001,M(j))
+            itwo=min(M(i)*1.001,M(j))
             RETURN
             END IF
          DO k=1,3
