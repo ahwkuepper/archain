@@ -556,10 +556,10 @@ C           Handle escape of particle
             END DO
 
             DO I=Ione+1,N
-                sm(i)=m(i)
+                sm(i-1)=m(i)
                 DO k=1,3
-                    XR(3*I-3+K)=X(3*I-3+k)
-                    XDR(3*I-3+K)=V(3*I-3+k)
+                    XR(3*I-6+K)=X(3*I-3+k)
+                    XDR(3*I-6+K)=V(3*I-3+k)
                 END DO
             END DO
           
@@ -579,8 +579,6 @@ c         New value of the number of bodies.
                     V(3*i-3+k)=XDR(3*i-3+k)
 7               CONTINUE
 8           CONTINUE
-
-            iescape=0
 
             WRITE(6,*)' Escape:',ione,' N, NBH=',N,NofBH
      &     ,' masses ',(M(k),k=1,N)
@@ -1795,7 +1793,7 @@ C        Is this a triangle with smallest size not regularised?
      &              /((M(I)*M(J))*(M(I)+M(J)))
         IF (TINSPIRAL.le.THUBBLE) THEN
             clightpn = 1.0
-            write(*,*) TINSPIRAL, I, J   !not entirely correct, since RIJ is only distance in one coordinate
+            write(*,*) TINSPIRAL, I, J
         ENDIF
         IJ(L,1)=I
         IJ(L,2)=J
