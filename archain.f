@@ -378,6 +378,23 @@ C           Handle escape of particles -- set escape radius here!
 
          END DO
 
+C       Repeat copying array in case a particle escaped (unnecessary?)
+        DO J=1,N
+            I = index4output(J)
+            L=3*(I-1)
+            K=3*(J-1)
+            MA(I)=M(J)
+            XA(L+1) = X(K+1)+CMXX(1)+CMXA(1)
+            XA(L+2) = X(K+2)+CMXX(2)+CMXA(2)
+            XA(L+3) = X(K+3)+CMXX(3)+CMXA(3)
+            VA(L+1) = V(K+1)+CMVX(1)+CMVA(1)
+            VA(L+2) = V(K+2)+CMVX(2)+CMVA(2)
+            VA(L+3) = V(K+3)+CMVX(3)+CMVA(3)
+         END DO
+
+
+
+
          RETURN
          END
 
@@ -418,8 +435,13 @@ C       Check for collisions between all particles
                 IF(rij.LT.test)THEN
                     iwarning=iwarning+1
                     icollision=1   ! collision indicator
-                    ione=max(M(i)*1.001,M(j))
-                    itwo=min(M(i)*1.001,M(j))
+                    IF (M(i).GE.M(j)) THEN
+                        ione=i
+                        itwo=j
+                    ELSE
+                        ione=j
+                        itwo=i
+                    END IF
                     RETURN
                 END IF
                 END IF
@@ -2685,8 +2707,13 @@ c                         test=.99*Rs
             IF(rij.LT.test)THEN!
             iwarning=iwarning+1
             icollision=1   ! collision indicator
-            ione=max(M(i)*1.001,M(j))
-            itwo=min(M(i)*1.001,M(j))
+            IF (M(i).GE.M(j)) THEN
+                 ione=i
+                 itwo=j
+            ELSE
+                 ione=j
+                 itwo=i
+            END IF
             RETURN
             END IF
          DO k=1,3
