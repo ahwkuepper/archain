@@ -172,6 +172,7 @@ C        WRITE(*,*) "VPAR: ", VPAR
      &           , SBH2(1), SBH2(2), SBH2(3)
      &           , VKICK(1), VKICK(2), VKICK(3)
      &           , VMASS, VPERP, VPAR
+     &           , SQRT(VKICK(1)**2+VKICK(2)**2+VKICK(3)**2)
 
         END DO
 
