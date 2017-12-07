@@ -1,0 +1,7 @@
+test 3 3 0.001 12000 10                    /OUTFILE, N, NBH, DELTAT, TMAX, DTOUT
+0 0.0 1 1.e-30 0 4570700.e0 1 0 0 0 1.e-12 /IWR, SOFT, CMET (3x), CLIGHT, IXC , SPIN (3x), TOLERANCE
+1.e6 1.0                                   /MCL, RPL
+100.0 0.01 0.0  0.00000   0.0   0.2  0.0   /M_BH1, X_BH1, V_BH1
+50.00 0.10 0.0  0.00005 -40.0 -33.18 0.0   /M_BH2, X_BH2, V_BH2
+50.00 0.10 0.0 -0.00005 -40.0 -13.18 0.0   /M_BH3, X_BH3, V_BH3
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0  

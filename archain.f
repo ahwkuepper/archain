@@ -44,9 +44,9 @@
 *****************************
 
 *       Read input values from STDIN
-        READ(5,*,err=999)OUTNAME,N,Nbh,DELTAT,TMAX, DTOUT
-        READ(5,*,err=999)IWR,soft,cmet, Clight,Ixc ,spin,tolerance
-        READ(5,*,err=999)MCL,RPL
+        READ(5,*,err=999) OUTNAME,N,Nbh,DELTAT,TMAX, DTOUT
+        READ(5,*,err=999) IWR,soft,cmet, Clight,Ixc,spin,tolerance
+        READ(5,*,err=999) MCL,RPL
 
 *       Initialize variables
         TMAX = TMAX/14.90763847 ! Scaling from pc, Myr, Msun to Nbody units

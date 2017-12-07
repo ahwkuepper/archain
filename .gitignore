@@ -1,3 +1,9 @@
 archain
 *~
 recoil
+.ipynb_checkpoints
+archain_nodiff
+*.png
+*.jpg
+*.pdf
+*.out
